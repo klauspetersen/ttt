@@ -203,7 +203,6 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options) {
         drvc->instances = g_slist_append(drvc->instances, sdi);
         devices = g_slist_append(devices, sdi);
 
-
         if (ezusb_upload_firmware(drvc->sr_ctx, devlist[i], USB_CONFIGURATION, FX2_FIRMWARE) != SR_OK) {
             sr_err("Firmware upload failed.");
         }
