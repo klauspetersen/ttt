@@ -18,12 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <config.h>
-#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
 #include <glib.h>
 #include "libsigrok.h"
 #include "libsigrok-internal.h"
@@ -51,161 +46,7 @@ struct datafeed_callback {
 	void *cb_data;
 };
 
-/** Custom GLib event source for generic descriptor I/O.
- * @see https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html
- * @internal
- */
-struct fd_source {
-	GSource base;
 
-	int64_t timeout_us;
-	int64_t due_us;
-
-	/* Meta-data needed to keep track of installed sources */
-	struct sr_session *session;
-	void *key;
-
-	GPollFD pollfd;
-};
-
-/** FD event source prepare() method.
- * This is called immediately before poll().
- */
-static gboolean fd_source_prepare(GSource *source, int *timeout)
-{
-	int64_t now_us;
-	struct fd_source *fsource;
-	int remaining_ms;
-
-	fsource = (struct fd_source *)source;
-
-	if (fsource->timeout_us >= 0) {
-		now_us = g_source_get_time(source);
-
-		if (fsource->due_us == 0) {
-			/* First-time initialization of the expiration time */
-			fsource->due_us = now_us + fsource->timeout_us;
-		}
-		remaining_ms = (MAX(0, fsource->due_us - now_us) + 999) / 1000;
-	} else {
-		remaining_ms = -1;
-	}
-	*timeout = remaining_ms;
-
-	return (remaining_ms == 0);
-}
-
-/** FD event source check() method.
- * This is called after poll() returns to check whether an event fired.
- */
-static gboolean fd_source_check(GSource *source)
-{
-	struct fd_source *fsource;
-	unsigned int revents;
-
-	fsource = (struct fd_source *)source;
-	revents = fsource->pollfd.revents;
-
-	return (revents != 0 || (fsource->timeout_us >= 0
-			&& fsource->due_us <= g_source_get_time(source)));
-}
-
-/** FD event source dispatch() method.
- * This is called if either prepare() or check() returned TRUE.
- */
-static gboolean fd_source_dispatch(GSource *source,
-		GSourceFunc callback, void *user_data)
-{
-	struct fd_source *fsource;
-	const char *name;
-	unsigned int revents;
-	gboolean keep;
-
-	fsource = (struct fd_source *)source;
-	name = g_source_get_name(source);
-	revents = fsource->pollfd.revents;
-
-	if (revents != 0) {
-		sr_spew("%s: %s " G_POLLFD_FORMAT ", revents 0x%.2X",
-			__func__, name, fsource->pollfd.fd, revents);
-	} else {
-		sr_spew("%s: %s " G_POLLFD_FORMAT ", timed out",
-			__func__, name, fsource->pollfd.fd);
-	}
-	if (!callback) {
-		sr_err("Callback not set, cannot dispatch event.");
-		return G_SOURCE_REMOVE;
-	}
-	keep = (*(sr_receive_data_callback)callback)
-			(fsource->pollfd.fd, revents, user_data);
-
-	if (fsource->timeout_us >= 0 && G_LIKELY(keep)
-			&& G_LIKELY(!g_source_is_destroyed(source)))
-		fsource->due_us = g_source_get_time(source)
-				+ fsource->timeout_us;
-	return keep;
-}
-
-/** FD event source finalize() method.
- */
-static void fd_source_finalize(GSource *source)
-{
-	struct fd_source *fsource;
-
-	fsource = (struct fd_source *)source;
-
-	sr_dbg("%s: key %p", __func__, fsource->key);
-
-	sr_session_source_destroyed(fsource->session, fsource->key, source);
-}
-
-/** Create an event source for I/O on a file descriptor.
- *
- * In order to maintain API compatibility, this event source also doubles
- * as a timer event source.
- *
- * @param session The session the event source belongs to.
- * @param key The key used to identify this source.
- * @param fd The file descriptor or HANDLE.
- * @param timeout_ms The timeout interval in ms, or -1 to wait indefinitely.
- * @return A new event source object, or NULL on failure.
- */
-static GSource *fd_source_new(struct sr_session *session, void *key,
-		gintptr fd, int events, int timeout_ms)
-{
-	static GSourceFuncs fd_source_funcs = {
-		.prepare  = &fd_source_prepare,
-		.check    = &fd_source_check,
-		.dispatch = &fd_source_dispatch,
-		.finalize = &fd_source_finalize
-	};
-	GSource *source;
-	struct fd_source *fsource;
-
-	source = g_source_new(&fd_source_funcs, sizeof(struct fd_source));
-	fsource = (struct fd_source *)source;
-
-	g_source_set_name(source, (fd < 0) ? "timer" : "fd");
-
-	if (timeout_ms >= 0) {
-		fsource->timeout_us = 1000 * (int64_t)timeout_ms;
-		fsource->due_us = 0;
-	} else {
-		fsource->timeout_us = -1;
-		fsource->due_us = INT64_MAX;
-	}
-	fsource->session = session;
-	fsource->key = key;
-
-	fsource->pollfd.fd = fd;
-	fsource->pollfd.events = events;
-	fsource->pollfd.revents = 0;
-
-	if (fd >= 0)
-		g_source_add_poll(source, &fsource->pollfd);
-
-	return source;
-}
 
 /**
  * Create a new session.
@@ -240,36 +81,6 @@ SR_API int sr_session_new(struct sr_context *ctx,
 	session->event_sources = g_hash_table_new(NULL, NULL);
 
 	*new_session = session;
-
-	return SR_OK;
-}
-
-/**
- * Destroy a session.
- * This frees up all memory used by the session.
- *
- * @param session The session to destroy. Must not be NULL.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid session passed.
- *
- * @since 0.4.0
- */
-SR_API int sr_session_destroy(struct sr_session *session)
-{
-	if (!session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-
-	sr_session_dev_remove_all(session);
-	g_slist_free_full(session->owned_devs, (GDestroyNotify)sr_dev_inst_free);
-
-	g_hash_table_unref(session->event_sources);
-
-	g_mutex_clear(&session->main_mutex);
-
-	g_free(session);
 
 	return SR_OK;
 }
@@ -321,11 +132,7 @@ SR_API int sr_session_dev_remove_all(struct sr_session *session)
  *
  * @since 0.4.0
  */
-SR_API int sr_session_dev_add(struct sr_session *session,
-		struct sr_dev_inst *sdi)
-{
-	int ret;
-
+SR_API int sr_session_dev_add(struct sr_session *session, struct sr_dev_inst *sdi){
 	if (!sdi) {
 		sr_err("%s: sdi was NULL", __func__);
 		return SR_ERR_ARG;
@@ -363,57 +170,7 @@ SR_API int sr_session_dev_add(struct sr_session *session,
 	return SR_OK;
 }
 
-/**
- * List all device instances attached to a session.
- *
- * @param session The session to use. Must not be NULL.
- * @param devlist A pointer where the device instance list will be
- *                stored on return. If no devices are in the session,
- *                this will be NULL. Each element in the list points
- *                to a struct sr_dev_inst *.
- *                The list must be freed by the caller, but not the
- *                elements pointed to.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid argument.
- *
- * @since 0.4.0
- */
-SR_API int sr_session_dev_list(struct sr_session *session, GSList **devlist)
-{
-	if (!session)
-		return SR_ERR_ARG;
 
-	if (!devlist)
-		return SR_ERR_ARG;
-
-	*devlist = g_slist_copy(session->devs);
-
-	return SR_OK;
-}
-
-/**
- * Remove all datafeed callbacks in a session.
- *
- * @param session The session to use. Must not be NULL.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid session passed.
- *
- * @since 0.4.0
- */
-SR_API int sr_session_datafeed_callback_remove_all(struct sr_session *session)
-{
-	if (!session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-
-	g_slist_free_full(session->datafeed_callbacks, g_free);
-	session->datafeed_callbacks = NULL;
-
-	return SR_OK;
-}
 
 /**
  * Add a datafeed callback to a session.
@@ -453,80 +210,7 @@ SR_API int sr_session_datafeed_callback_add(struct sr_session *session,
 	return SR_OK;
 }
 
-/**
- * Get the trigger assigned to this session.
- *
- * @param session The session to use.
- *
- * @retval NULL Invalid (NULL) session was passed to the function.
- * @retval other The trigger assigned to this session (can be NULL).
- *
- * @since 0.4.0
- */
-SR_API struct sr_trigger *sr_session_trigger_get(struct sr_session *session)
-{
-	if (!session)
-		return NULL;
 
-	return session->trigger;
-}
-
-/**
- * Set the trigger of this session.
- *
- * @param session The session to use. Must not be NULL.
- * @param trig The trigger to assign to this session. Can be NULL.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid argument.
- *
- * @since 0.4.0
- */
-SR_API int sr_session_trigger_set(struct sr_session *session, struct sr_trigger *trig)
-{
-	if (!session)
-		return SR_ERR_ARG;
-
-	session->trigger = trig;
-
-	return SR_OK;
-}
-
-static int verify_trigger(struct sr_trigger *trigger)
-{
-	struct sr_trigger_stage *stage;
-	struct sr_trigger_match *match;
-	GSList *l, *m;
-
-	if (!trigger->stages) {
-		sr_err("No trigger stages defined.");
-		return SR_ERR;
-	}
-
-	sr_spew("Checking trigger:");
-	for (l = trigger->stages; l; l = l->next) {
-		stage = l->data;
-		if (!stage->matches) {
-			sr_err("Stage %d has no matches defined.", stage->stage);
-			return SR_ERR;
-		}
-		for (m = stage->matches; m; m = m->next) {
-			match = m->data;
-			if (!match->channel) {
-				sr_err("Stage %d match has no channel.", stage->stage);
-				return SR_ERR;
-			}
-			if (!match->match) {
-				sr_err("Stage %d match is not defined.", stage->stage);
-				return SR_ERR;
-			}
-			sr_spew("Stage %d match on channel %s, match %d", stage->stage,
-					match->channel->name, match->match);
-		}
-	}
-
-	return SR_OK;
-}
 
 /** Set up the main context the session will be executing in.
  *
@@ -702,7 +386,7 @@ SR_API int sr_session_start(struct sr_session *session)
 {
 	struct sr_dev_inst *sdi;
 	struct sr_channel *ch;
-	GSList *l, *c, *lend;
+	GSList *l, *c;
 	int ret;
 
 	if (!session) {
@@ -721,11 +405,6 @@ SR_API int sr_session_start(struct sr_session *session)
 		return SR_ERR;
 	}
 
-	if (session->trigger) {
-	        ret = verify_trigger(session->trigger);
-		if (ret != SR_OK)
-			return ret;
-	}
 
 	/* Check enabled channels and commit settings of all devices. */
 	for (l = session->devs; l; l = l->next) {
@@ -785,185 +464,7 @@ SR_API int sr_session_start(struct sr_session *session)
 	return SR_OK;
 }
 
-/**
- * Block until the running session stops.
- *
- * This is a convenience function which creates a GLib main loop and runs
- * it to process session events until the session stops.
- *
- * Instead of using this function, applications may run their own GLib main
- * loop, and use sr_session_stopped_callback_set() to receive notification
- * when the session finished running.
- *
- * @param session The session to use. Must not be NULL.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid session passed.
- * @retval SR_ERR Other error.
- *
- * @since 0.4.0
- */
-SR_API int sr_session_run(struct sr_session *session)
-{
-	if (!session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-	if (!session->running) {
-		sr_err("No session running.");
-		return SR_ERR;
-	}
-	if (session->main_loop) {
-		sr_err("Main loop already created.");
-		return SR_ERR;
-	}
 
-	g_mutex_lock(&session->main_mutex);
-
-	if (!session->main_context) {
-		sr_err("Cannot run without main context.");
-		g_mutex_unlock(&session->main_mutex);
-		return SR_ERR;
-	}
-	session->main_loop = g_main_loop_new(session->main_context, FALSE);
-
-	g_mutex_unlock(&session->main_mutex);
-
-	g_main_loop_run(session->main_loop);
-
-	g_main_loop_unref(session->main_loop);
-	session->main_loop = NULL;
-
-	return SR_OK;
-}
-
-static gboolean session_stop_sync(void *user_data)
-{
-	struct sr_session *session;
-	struct sr_dev_inst *sdi;
-	GSList *node;
-
-	session = user_data;
-
-	if (!session->running)
-		return G_SOURCE_REMOVE;
-
-	sr_info("Stopping.");
-
-	for (node = session->devs; node; node = node->next) {
-		sdi = node->data;
-		if (sdi->driver && sdi->driver->dev_acquisition_stop)
-			sdi->driver->dev_acquisition_stop(sdi, sdi);
-	}
-
-	return G_SOURCE_REMOVE;
-}
-
-/**
- * Stop a session.
- *
- * This requests the drivers of each device participating in the session to
- * abort the acquisition as soon as possible. Even after this function returns,
- * event processing still continues until all devices have actually stopped.
- *
- * Use sr_session_stopped_callback_set() to receive notification when the event
- * processing finished.
- *
- * This function is reentrant. That is, it may be called from a different
- * thread than the one executing the session, as long as it can be ensured
- * that the session object is valid.
- *
- * If the session is not running, sr_session_stop() silently does nothing.
- *
- * @param session The session to use. Must not be NULL.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid session passed.
- *
- * @since 0.4.0
- */
-SR_API int sr_session_stop(struct sr_session *session)
-{
-	GMainContext *main_context;
-
-	if (!session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-
-	g_mutex_lock(&session->main_mutex);
-
-	main_context = (session->main_context)
-		? g_main_context_ref(session->main_context)
-		: NULL;
-
-	g_mutex_unlock(&session->main_mutex);
-
-	if (!main_context) {
-		sr_dbg("No main context set; already stopped?");
-		/* Not an error; as it would be racy. */
-		return SR_OK;
-	}
-	g_main_context_invoke(main_context, &session_stop_sync, session);
-	g_main_context_unref(main_context);
-
-	return SR_OK;
-}
-
-/**
- * Return whether the session is currently running.
- *
- * Note that this function should be called from the same thread
- * the session was started in.
- *
- * @param session The session to use. Must not be NULL.
- *
- * @retval TRUE Session is running.
- * @retval FALSE Session is not running.
- * @retval SR_ERR_ARG Invalid session passed.
- *
- * @since 0.4.0
- */
-SR_API int sr_session_is_running(struct sr_session *session)
-{
-	if (!session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-	return session->running;
-}
-
-/**
- * Set the callback to be invoked after a session stopped running.
- *
- * Install a callback to receive notification when a session run stopped.
- * This can be used to integrate session execution with an existing main
- * loop, without having to block in sr_session_run().
- *
- * Note that the callback will be invoked in the context of the thread
- * that calls sr_session_start().
- *
- * @param session The session to use. Must not be NULL.
- * @param cb The callback to invoke on session stop. May be NULL to unset.
- * @param cb_data User data pointer to be passed to the callback.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid session passed.
- *
- * @since 0.4.0
- */
-SR_API int sr_session_stopped_callback_set(struct sr_session *session,
-		sr_session_stopped_callback cb, void *cb_data)
-{
-	if (!session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-	session->stopped_callback = cb;
-	session->stopped_cb_data = cb_data;
-
-	return SR_OK;
-}
 
 /**
  * Debug helper.
@@ -1035,7 +536,6 @@ SR_PRIV int sr_session_send(const struct sr_dev_inst *sdi,
 {
 	GSList *l;
 	struct datafeed_callback *cb_struct;
-	struct sr_datafeed_packet *packet_out;
 
 	if (!sdi) {
 		sr_err("%s: sdi was NULL", __func__);
@@ -1100,120 +600,7 @@ SR_PRIV int sr_session_source_add_internal(struct sr_session *session,
 	return SR_OK;
 }
 
-SR_PRIV int sr_session_fd_source_add(struct sr_session *session,
-		void *key, gintptr fd, int events, int timeout,
-		sr_receive_data_callback cb, void *cb_data)
-{
-	GSource *source;
-	int ret;
 
-	source = fd_source_new(session, key, fd, events, timeout);
-	if (!source)
-		return SR_ERR;
-
-	g_source_set_callback(source, (GSourceFunc)cb, cb_data, NULL);
-
-	ret = sr_session_source_add_internal(session, key, source);
-	g_source_unref(source);
-
-	return ret;
-}
-
-/**
- * Add an event source for a file descriptor.
- *
- * @param session The session to use. Must not be NULL.
- * @param fd The file descriptor, or a negative value to create a timer source.
- * @param events Events to check for.
- * @param timeout Max time in ms to wait before the callback is called,
- *                or -1 to wait indefinitely.
- * @param cb Callback function to add. Must not be NULL.
- * @param cb_data Data for the callback function. Can be NULL.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid argument.
- *
- * @since 0.3.0
- * @private
- */
-SR_PRIV int sr_session_source_add(struct sr_session *session, int fd,
-		int events, int timeout, sr_receive_data_callback cb, void *cb_data)
-{
-	if (fd < 0 && timeout < 0) {
-		sr_err("Cannot create timer source without timeout.");
-		return SR_ERR_ARG;
-	}
-	return sr_session_fd_source_add(session, GINT_TO_POINTER(fd),
-			fd, events, timeout, cb, cb_data);
-}
-
-/**
- * Add an event source for a GPollFD.
- *
- * @param session The session to use. Must not be NULL.
- * @param pollfd The GPollFD. Must not be NULL.
- * @param timeout Max time in ms to wait before the callback is called,
- *                or -1 to wait indefinitely.
- * @param cb Callback function to add. Must not be NULL.
- * @param cb_data Data for the callback function. Can be NULL.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid argument.
- *
- * @since 0.3.0
- * @private
- */
-SR_PRIV int sr_session_source_add_pollfd(struct sr_session *session,
-		GPollFD *pollfd, int timeout, sr_receive_data_callback cb,
-		void *cb_data)
-{
-	if (!pollfd) {
-		sr_err("%s: pollfd was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-	return sr_session_fd_source_add(session, pollfd, pollfd->fd,
-			pollfd->events, timeout, cb, cb_data);
-}
-
-/**
- * Add an event source for a GIOChannel.
- *
- * @param session The session to use. Must not be NULL.
- * @param channel The GIOChannel.
- * @param events Events to poll on.
- * @param timeout Max time in ms to wait before the callback is called,
- *                or -1 to wait indefinitely.
- * @param cb Callback function to add. Must not be NULL.
- * @param cb_data Data for the callback function. Can be NULL.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid argument.
- *
- * @since 0.3.0
- * @private
- */
-SR_PRIV int sr_session_source_add_channel(struct sr_session *session,
-		GIOChannel *channel, int events, int timeout,
-		sr_receive_data_callback cb, void *cb_data)
-{
-	GPollFD pollfd;
-
-	if (!channel) {
-		sr_err("%s: channel was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-	/* We should be using g_io_create_watch(), but can't without
-	 * changing the driver API, as the callback signature is different.
-	 */
-#ifdef G_OS_WIN32
-	g_io_channel_win32_make_pollfd(channel, events, &pollfd);
-#else
-	pollfd.fd = g_io_channel_unix_get_fd(channel);
-	pollfd.events = events;
-#endif
-	return sr_session_fd_source_add(session, channel, pollfd.fd,
-			pollfd.events, timeout, cb, cb_data);
-}
 
 /**
  * Remove the source identified by the specified poll object.
@@ -1226,9 +613,7 @@ SR_PRIV int sr_session_source_add_channel(struct sr_session *session,
  *
  * @private
  */
-SR_PRIV int sr_session_source_remove_internal(struct sr_session *session,
-		void *key)
-{
+SR_PRIV int sr_session_source_remove_internal(struct sr_session *session, void *key){
 	GSource *source;
 
 	source = g_hash_table_lookup(session->event_sources, key);
@@ -1245,69 +630,8 @@ SR_PRIV int sr_session_source_remove_internal(struct sr_session *session,
 	return SR_OK;
 }
 
-/**
- * Remove the source belonging to the specified file descriptor.
- *
- * @param session The session to use. Must not be NULL.
- * @param fd The file descriptor for which the source should be removed.
- *
- * @retval SR_OK Success
- * @retval SR_ERR_ARG Invalid argument
- * @retval SR_ERR_BUG Internal error.
- *
- * @since 0.3.0
- * @private
- */
-SR_PRIV int sr_session_source_remove(struct sr_session *session, int fd)
-{
-	return sr_session_source_remove_internal(session, GINT_TO_POINTER(fd));
-}
 
-/**
- * Remove the source belonging to the specified poll descriptor.
- *
- * @param session The session to use. Must not be NULL.
- * @param pollfd The poll descriptor for which the source should be removed.
- *               Must not be NULL.
- * @return SR_OK upon success, SR_ERR_ARG upon invalid arguments, or
- *         SR_ERR_MALLOC upon memory allocation errors, SR_ERR_BUG upon
- *         internal errors.
- *
- * @since 0.2.0
- * @private
- */
-SR_PRIV int sr_session_source_remove_pollfd(struct sr_session *session,
-		GPollFD *pollfd)
-{
-	if (!pollfd) {
-		sr_err("%s: pollfd was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-	return sr_session_source_remove_internal(session, pollfd);
-}
 
-/**
- * Remove the source belonging to the specified channel.
- *
- * @param session The session to use. Must not be NULL.
- * @param channel The channel for which the source should be removed.
- *                Must not be NULL.
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid argument.
- * @return SR_ERR_BUG Internal error.
- *
- * @since 0.2.0
- * @private
- */
-SR_PRIV int sr_session_source_remove_channel(struct sr_session *session,
-		GIOChannel *channel)
-{
-	if (!channel) {
-		sr_err("%s: channel was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-	return sr_session_source_remove_internal(session, channel);
-}
 
 /** Unregister an event source that has been destroyed.
  *
@@ -1354,145 +678,5 @@ SR_PRIV int sr_session_source_destroyed(struct sr_session *session,
 	return stop_check_later(session);
 }
 
-static void copy_src(struct sr_config *src, struct sr_datafeed_meta *meta_copy)
-{
-	g_variant_ref(src->data);
-	meta_copy->config = g_slist_append(meta_copy->config,
-	                                   g_memdup(src, sizeof(struct sr_config)));
-}
-
-SR_PRIV int sr_packet_copy(const struct sr_datafeed_packet *packet,
-		struct sr_datafeed_packet **copy)
-{
-	const struct sr_datafeed_meta *meta;
-	struct sr_datafeed_meta *meta_copy;
-	const struct sr_datafeed_logic *logic;
-	struct sr_datafeed_logic *logic_copy;
-	const struct sr_datafeed_analog_old *analog_old;
-	struct sr_datafeed_analog_old *analog_old_copy;
-	const struct sr_datafeed_analog *analog;
-	struct sr_datafeed_analog *analog_copy;
-	uint8_t *payload;
-
-	*copy = g_malloc0(sizeof(struct sr_datafeed_packet));
-	(*copy)->type = packet->type;
-
-	switch (packet->type) {
-	case SR_DF_TRIGGER:
-	case SR_DF_END:
-		/* No payload. */
-		break;
-	case SR_DF_HEADER:
-		payload = g_malloc(sizeof(struct sr_datafeed_header));
-		memcpy(payload, packet->payload, sizeof(struct sr_datafeed_header));
-		(*copy)->payload = payload;
-		break;
-	case SR_DF_META:
-		meta = packet->payload;
-		meta_copy = g_malloc0(sizeof(struct sr_datafeed_meta));
-		g_slist_foreach(meta->config, (GFunc)copy_src, meta_copy->config);
-		(*copy)->payload = meta_copy;
-		break;
-	case SR_DF_LOGIC:
-		logic = packet->payload;
-		logic_copy = g_malloc(sizeof(logic));
-		logic_copy->length = logic->length;
-		logic_copy->unitsize = logic->unitsize;
-		memcpy(logic_copy->data, logic->data, logic->length * logic->unitsize);
-		(*copy)->payload = logic_copy;
-		break;
-	case SR_DF_ANALOG_OLD:
-		analog_old = packet->payload;
-		analog_old_copy = g_malloc(sizeof(analog_old));
-		analog_old_copy->channels = g_slist_copy(analog_old->channels);
-		analog_old_copy->num_samples = analog_old->num_samples;
-		analog_old_copy->mq = analog_old->mq;
-		analog_old_copy->unit = analog_old->unit;
-		analog_old_copy->mqflags = analog_old->mqflags;
-		analog_old_copy->data = g_malloc(analog_old->num_samples * sizeof(float));
-		memcpy(analog_old_copy->data, analog_old->data,
-				analog_old->num_samples * sizeof(float));
-		(*copy)->payload = analog_old_copy;
-		break;
-	case SR_DF_ANALOG:
-		analog = packet->payload;
-		analog_copy = g_malloc(sizeof(analog));
-		analog_copy->data = g_malloc(
-				analog->encoding->unitsize * analog->num_samples);
-		memcpy(analog_copy->data, analog->data,
-				analog->encoding->unitsize * analog->num_samples);
-		analog_copy->num_samples = analog->num_samples;
-		analog_copy->encoding = g_memdup(analog->encoding,
-				sizeof(struct sr_analog_encoding));
-		analog_copy->meaning = g_memdup(analog->meaning,
-				sizeof(struct sr_analog_meaning));
-		analog_copy->meaning->channels = g_slist_copy(
-				analog->meaning->channels);
-		analog_copy->spec = g_memdup(analog->spec,
-				sizeof(struct sr_analog_spec));
-		(*copy)->payload = analog_copy;
-		break;
-	default:
-		sr_err("Unknown packet type %d", packet->type);
-		return SR_ERR;
-	}
-
-	return SR_OK;
-}
-
-void sr_packet_free(struct sr_datafeed_packet *packet)
-{
-	const struct sr_datafeed_meta *meta;
-	const struct sr_datafeed_logic *logic;
-	const struct sr_datafeed_analog_old *analog_old;
-	const struct sr_datafeed_analog *analog;
-	struct sr_config *src;
-	GSList *l;
-
-	switch (packet->type) {
-	case SR_DF_TRIGGER:
-	case SR_DF_END:
-		/* No payload. */
-		break;
-	case SR_DF_HEADER:
-		/* Payload is a simple struct. */
-		g_free((void *)packet->payload);
-		break;
-	case SR_DF_META:
-		meta = packet->payload;
-		for (l = meta->config; l; l = l->next) {
-			src = l->data;
-			g_variant_unref(src->data);
-			g_free(src);
-		}
-		g_slist_free(meta->config);
-		g_free((void *)packet->payload);
-		break;
-	case SR_DF_LOGIC:
-		logic = packet->payload;
-		g_free(logic->data);
-		g_free((void *)packet->payload);
-		break;
-	case SR_DF_ANALOG_OLD:
-		analog_old = packet->payload;
-		g_slist_free(analog_old->channels);
-		g_free(analog_old->data);
-		g_free((void *)packet->payload);
-		break;
-	case SR_DF_ANALOG:
-		analog = packet->payload;
-		g_free(analog->data);
-		g_free(analog->encoding);
-		g_slist_free(analog->meaning->channels);
-		g_free(analog->meaning);
-		g_free(analog->spec);
-		g_free((void *)packet->payload);
-		break;
-	default:
-		sr_err("Unknown packet type %d", packet->type);
-	}
-	g_free(packet);
-
-}
 
 /** @} */

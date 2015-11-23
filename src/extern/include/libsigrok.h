@@ -118,7 +118,7 @@ enum sr_loglevel {
 
 /* Marks public libsigrok API symbols. */
 #ifndef _WIN32
-#define SR_API __attribute__((visibility("default")))
+#define SR_API
 #else
 #define SR_API
 #endif

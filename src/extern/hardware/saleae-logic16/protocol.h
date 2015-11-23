@@ -46,19 +46,10 @@ struct dev_context {
 	/** Distinguishing between original Logic16 and clones */
 	enum fpga_variant fpga_variant;
 
-	/*
-	 * Since we can't keep track of a Logic16 device after upgrading
-	 * the firmware (it renumerates into a different device address
-	 * after the upgrade) this is like a global lock. No device will open
-	 * until a proper delay after the last device was upgraded.
-	 */
-	int64_t fw_updated;
+
 
 	/** The currently configured samplerate of the device. */
 	uint64_t cur_samplerate;
-
-	/** Maximum number of samples to capture, if nonzero. */
-	uint64_t limit_samples;
 
 	/** Percent of the samples that should be captured before the trigger. */
 	uint64_t capture_ratio;
@@ -77,15 +68,10 @@ struct dev_context {
 
 	int64_t sent_samples;
 	int submitted_transfers;
-	int empty_transfer_count;
 	int num_channels;
-	int cur_channel;
 	uint16_t channel_masks[16];
 	uint16_t channel_data[16];
 	uint8_t *convbuffer;
-	size_t convbuffer_size;
-	struct soft_trigger_logic *stl;
-	gboolean trigger_fired;
 
 	void *cb_data;
 	unsigned int num_transfers;

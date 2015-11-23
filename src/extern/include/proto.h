@@ -20,19 +20,12 @@
 #ifndef LIBSIGROK_PROTO_H
 #define LIBSIGROK_PROTO_H
 
+#define SR_API
 /**
  * @file
  *
  * Header file containing API function prototypes.
  */
-
-/*--- analog.c --------------------------------------------------------------*/
-
-SR_API int sr_analog_to_float(const struct sr_datafeed_analog *analog,
-		float *buf);
-SR_API int sr_analog_unit_to_string(const struct sr_datafeed_analog *analog,
-		char **result);
-SR_API void sr_rational_set(struct sr_rational *r, int64_t p, uint64_t q);
 
 /*--- backend.c -------------------------------------------------------------*/
 

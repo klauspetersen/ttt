@@ -90,41 +90,7 @@ static int init(struct sr_dev_driver *di, struct sr_context *sr_ctx) {
     return std_init(sr_ctx, di, LOG_PREFIX);
 }
 
-static gboolean check_conf_profile(libusb_device *dev) {
-    struct libusb_device_descriptor des;
-    struct libusb_device_handle *hdl;
-    gboolean ret;
-    unsigned char strdesc[64];
 
-    hdl = NULL;
-    ret = FALSE;
-    while (!ret) {
-        /* Assume the FW has not been loaded, unless proven wrong. */
-        libusb_get_device_descriptor(dev, &des);
-
-        if (libusb_open(dev, &hdl) != 0)
-            break;
-
-        if (libusb_get_string_descriptor_ascii(hdl,
-                                               des.iManufacturer, strdesc, sizeof(strdesc)) < 0)
-            break;
-        if (strcmp((const char *) strdesc, "Saleae LLC"))
-            break;
-
-        if (libusb_get_string_descriptor_ascii(hdl,
-                                               des.iProduct, strdesc, sizeof(strdesc)) < 0)
-            break;
-        if (strcmp((const char *) strdesc, "Logic S/16"))
-            break;
-
-        /* If we made it here, it must be a configured Logic16. */
-        ret = TRUE;
-    }
-    if (hdl)
-        libusb_close(hdl);
-
-    return ret;
-}
 
 static GSList *scan(struct sr_dev_driver *di, GSList *options) {
     struct drv_context *drvc;
@@ -150,6 +116,8 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options) {
             case SR_CONF_CONN:
                 conn = g_variant_get_string(src->data, NULL);
                 break;
+            default:
+                break;
         }
     }
     if (conn)
@@ -162,7 +130,6 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options) {
     libusb_get_device_list(drvc->sr_ctx->libusb_ctx, &devlist);
     for (i = 0; devlist[i]; i++) {
         if (conn) {
-            usb = NULL;
             for (l = conn_devices; l; l = l->next) {
                 usb = l->data;
                 if (usb->bus == libusb_get_bus_number(devlist[i])
@@ -305,7 +272,7 @@ static int logic16_dev_open(struct sr_dev_inst *sdi) {
             break;
         }
 
-        if ((ret = logic16_init_device(sdi)) != SR_OK) {
+        if (logic16_init_device(sdi) != SR_OK) {
             sr_err("Failed to init device.");
             break;
         }
@@ -332,15 +299,12 @@ static int logic16_dev_open(struct sr_dev_inst *sdi) {
 
 static int dev_open(struct sr_dev_inst *sdi) {
     struct dev_context *devc;
-    int ret;
-    int64_t timediff_us;
 
     devc = sdi->priv;
 
-    ret = SR_ERR;
     sr_info("Waiting for device to reset.");
     while (1) {
-        if ((ret = logic16_dev_open(sdi)) == SR_OK) {
+        if (logic16_dev_open(sdi) == SR_OK) {
             sr_info("Device found.");
             break;
         }
@@ -349,10 +313,6 @@ static int dev_open(struct sr_dev_inst *sdi) {
         g_usleep(100 * 1000);
     }
 
-    if (ret != SR_OK) {
-        sr_err("Device failed to renumerate.");
-        return SR_ERR;
-    }
 
     if (devc->cur_samplerate == 0) {
         /* Samplerate hasn't been set; default to the slowest one. */
@@ -365,7 +325,6 @@ static int dev_open(struct sr_dev_inst *sdi) {
 
         sr_info("Samplerate set to %d", (uint32_t) devc->cur_samplerate);
     }
-
     return SR_OK;
 }
 
@@ -478,9 +437,6 @@ static int config_set(uint32_t key, GVariant *data, const struct sr_dev_inst *sd
         case SR_CONF_SAMPLERATE:
             devc->cur_samplerate = g_variant_get_uint64(data);
             break;
-        case SR_CONF_LIMIT_SAMPLES:
-            devc->limit_samples = g_variant_get_uint64(data);
-            break;
         case SR_CONF_CAPTURE_RATIO:
             devc->capture_ratio = g_variant_get_uint64(data);
             ret = (devc->capture_ratio > 100) ? SR_ERR : SR_OK;
@@ -587,16 +543,6 @@ static unsigned int get_number_of_transfers(struct dev_context *devc) {
     return n;
 }
 
-static unsigned int get_timeout(struct dev_context *devc) {
-    size_t total_size;
-    unsigned int timeout;
-
-    total_size = get_buffer_size(devc) * get_number_of_transfers(devc);
-    timeout = total_size / bytes_per_ms(devc);
-    //return timeout + timeout / 4; /* Leave a headroom of 25% percent. */
-    /* TODO: XXX */
-    return 1000;
-}
 
 static int configure_channels(const struct sr_dev_inst *sdi) {
     struct dev_context *devc;
@@ -616,16 +562,6 @@ static int configure_channels(const struct sr_dev_inst *sdi) {
         channel_bit = 1 << (ch->index);
 
         devc->cur_channels |= channel_bit;
-
-#ifdef WORDS_BIGENDIAN
-        /*
-         * Output logic data should be stored in little endian format.
-         * To speed things up during conversion, do the switcharoo
-         * here instead.
-         */
-        channel_bit = 1 << (ch->index ^ 8);
-#endif
-
         devc->channel_masks[devc->num_channels++] = channel_bit;
     }
 
@@ -665,7 +601,6 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi, void *cb_data) {
     struct dev_context *devc;
     struct drv_context *drvc;
     struct sr_usb_dev_inst *usb;
-    struct sr_trigger *trigger;
     struct libusb_transfer *transfer;
     unsigned int i, timeout, num_transfers;
     int ret;
@@ -689,19 +624,14 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi, void *cb_data) {
 
     devc->cb_data = cb_data;
     devc->sent_samples = 0;
-    devc->empty_transfer_count = 0;
-    devc->cur_channel = 0;
     memset(devc->channel_data, 0, sizeof(devc->channel_data));
 
-    devc->trigger_fired = TRUE;
-
-    timeout = get_timeout(devc);
+    timeout = 1000;
     num_transfers = get_number_of_transfers(devc);
     size = get_buffer_size(devc);
     convsize = (size / devc->num_channels + 2) * 16;
     devc->submitted_transfers = 0;
 
-    devc->convbuffer_size = convsize;
     if (!(devc->convbuffer = g_try_malloc(convsize))) {
         sr_err("Conversion buffer malloc failed.");
         return SR_ERR_MALLOC;

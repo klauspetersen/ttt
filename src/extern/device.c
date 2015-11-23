@@ -17,7 +17,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <config.h>
 #include <stdio.h>
 #include <glib.h>
 #include "libsigrok.h"
@@ -69,43 +68,6 @@ SR_PRIV struct sr_channel *sr_channel_new(struct sr_dev_inst *sdi,
 	return ch;
 }
 
-
-/**
- * Enable or disable a channel.
- *
- * @param[in] channel The channel to enable or disable.
- * @param[in] state   TRUE to enable the channel, FALSE to disable.
- *
- * @return SR_OK on success or SR_ERR on failure.  In case of invalid
- *         arguments, SR_ERR_ARG is returned and the channel enabled state
- *         remains unchanged.
- *
- * @since 0.3.0
- */
-SR_API int sr_dev_channel_enable(struct sr_channel *channel,
-		gboolean state)
-{
-	int ret;
-	gboolean was_enabled;
-	struct sr_dev_inst *sdi;
-
-	if (!channel)
-		return SR_ERR_ARG;
-
-	sdi = channel->sdi;
-	was_enabled = channel->enabled;
-	channel->enabled = state;
-	if (!state != !was_enabled && sdi->driver
-			&& sdi->driver->config_channel_set) {
-		ret = sdi->driver->config_channel_set(
-			sdi, channel, SR_CHANNEL_SET_ENABLED);
-		/* Roll back change if it wasn't applicable. */
-		if (ret != SR_OK)
-			return ret;
-	}
-
-	return SR_OK;
-}
 
 /** @private
  *  Free device instance struct created by sr_dev_inst().
@@ -173,18 +135,6 @@ SR_PRIV void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb)
 }
 
 
-/** @private */
-SR_PRIV struct sr_usbtmc_dev_inst *sr_usbtmc_dev_inst_new(const char *device)
-{
-	struct sr_usbtmc_dev_inst *usbtmc;
-
-	usbtmc = g_malloc0(sizeof(struct sr_usbtmc_dev_inst));
-	usbtmc->device = g_strdup(device);
-	usbtmc->fd = -1;
-
-	return usbtmc;
-}
-
 /**
  * Open the specified device.
  *
@@ -205,4 +155,3 @@ SR_API int sr_dev_open(struct sr_dev_inst *sdi)
 
 	return ret;
 }
-

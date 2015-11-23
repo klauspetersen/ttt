@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <thread>
 #include "libsigrok.h"
-#include "proto.h"
 #include "libsigrok-internal.h"
 #include "ProducerConsumerQueue.h"
 
@@ -29,6 +28,9 @@ void datafeed_in(const struct sr_dev_inst *sdi, const struct sr_datafeed_packet 
     /* If the first packet to come in isn't a header, don't even try. */
     struct sr_datafeed_logic *logic;
     uint8_t data;
+
+    (void)cb_data;
+    (void)sdi;
 
     if (packet->type != SR_DF_HEADER){
         logic = (struct sr_datafeed_logic *)packet->payload;
@@ -101,10 +103,5 @@ int main()
 
     g_main_loop_run(main_loop);
 
-    while(1){
-        sleep(1);
-        cout << "." << endl;
-        fflush(stdout); 
-    }
     return 0;
 }

@@ -17,11 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <config.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/types.h>
-#include <dirent.h>
 #include <string.h>
 #include <glib.h>
 #include "libsigrok.h"
@@ -597,6 +594,8 @@ static int check_key(const struct sr_dev_driver *driver,
 			return SR_ERR_ARG;
 		}
 		break;
+		default:
+			break;
 	}
 
 	if (sr_config_list(driver, sdi, cg, SR_CONF_DEVICE_OPTIONS, &gvar_opts) != SR_OK) {

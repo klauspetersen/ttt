@@ -19,13 +19,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <config.h>
 #include <stdint.h>
 #include <string.h>
 #include <glib.h>
-#include <glib/gstdio.h>
-#include <stdio.h>
-#include <errno.h>
 #include <math.h>
 #include "libsigrok.h"
 #include "libsigrok-internal.h"
@@ -46,25 +42,18 @@
 
 #define COMMAND_START_ACQUISITION	1
 #define COMMAND_ABORT_ACQUISITION_ASYNC	2
-#define COMMAND_WRITE_EEPROM		6
 #define COMMAND_READ_EEPROM		7
 #define COMMAND_WRITE_LED_TABLE		0x7a
 #define COMMAND_SET_LED_MODE		0x7b
-#define COMMAND_RETURN_TO_BOOTLOADER	0x7c
 #define COMMAND_ABORT_ACQUISITION_SYNC	0x7d
 #define COMMAND_FPGA_UPLOAD_INIT	0x7e
 #define COMMAND_FPGA_UPLOAD_SEND_DATA	0x7f
 #define COMMAND_FPGA_WRITE_REGISTER	0x80
 #define COMMAND_FPGA_READ_REGISTER	0x81
-#define COMMAND_GET_REVID		0x82
 
-#define WRITE_EEPROM_COOKIE1		0x42
-#define WRITE_EEPROM_COOKIE2		0x55
 #define READ_EEPROM_COOKIE1		0x33
 #define READ_EEPROM_COOKIE2		0x81
 #define ABORT_ACQUISITION_SYNC_PATTERN	0x55
-
-#define MAX_EMPTY_TRANSFERS		64
 
 /* Register mappings for old and new bitstream versions */
 
@@ -450,8 +439,7 @@ static void make_heartbeat(uint8_t *table, int len)
 			*table++ = sin(j * G_PI / len) * 255;
 }
 
-static int configure_led(const struct sr_dev_inst *sdi)
-{
+static int configure_led(const struct sr_dev_inst *sdi){
 	uint8_t table[64];
 	int ret;
 
@@ -462,9 +450,7 @@ static int configure_led(const struct sr_dev_inst *sdi)
 	return set_led_mode(sdi, 1, 6250, 0, 1);
 }
 
-static int upload_fpga_bitstream(const struct sr_dev_inst *sdi,
-				 enum voltage_range vrange)
-{
+static int upload_fpga_bitstream(const struct sr_dev_inst *sdi, enum voltage_range vrange){
 	uint64_t sum;
 	struct sr_resource bitstream;
 	struct dev_context *devc;
@@ -544,8 +530,7 @@ static int upload_fpga_bitstream(const struct sr_dev_inst *sdi,
 	return SR_OK;
 }
 
-static int abort_acquisition_sync(const struct sr_dev_inst *sdi)
-{
+static int abort_acquisition_sync(const struct sr_dev_inst *sdi){
 	static const uint8_t command[2] = {
 		COMMAND_ABORT_ACQUISITION_SYNC,
 		ABORT_ACQUISITION_SYNC_PATTERN,
@@ -566,9 +551,7 @@ static int abort_acquisition_sync(const struct sr_dev_inst *sdi)
 	return SR_OK;
 }
 
-SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi,
-			     uint64_t samplerate, uint16_t channels)
-{
+SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t samplerate, uint16_t channels){
 	uint8_t clock_select, sta_con_reg, mode_reg;
 	uint64_t div;
 	int i, ret, nchan = 0;
@@ -661,8 +644,7 @@ SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi,
 	return SR_OK;
 }
 
-SR_PRIV int logic16_start_acquisition(const struct sr_dev_inst *sdi)
-{
+SR_PRIV int logic16_start_acquisition(const struct sr_dev_inst *sdi){
     static const uint8_t command[1] = {
             COMMAND_START_ACQUISITION,
     };
@@ -679,8 +661,7 @@ sr_info("logic16_start_acquisition");
     return write_fpga_register(sdi, FPGA_REG(STATUS_CONTROL), FPGA_STATUS_CONTROL(UNKNOWN2) | FPGA_STATUS_CONTROL(RUNNING));
 }
 
-SR_PRIV int logic16_abort_acquisition(const struct sr_dev_inst *sdi)
-{
+SR_PRIV int logic16_abort_acquisition(const struct sr_dev_inst *sdi){
 	static const uint8_t command[1] = {
 		COMMAND_ABORT_ACQUISITION_ASYNC,
 	};
@@ -725,8 +706,7 @@ SR_PRIV int logic16_abort_acquisition(const struct sr_dev_inst *sdi)
 	return SR_OK;
 }
 
-SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi)
-{
+SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi){
 	uint8_t version;
 	struct dev_context *devc;
 	int ret;
@@ -823,145 +803,14 @@ static void resubmit_transfer(struct libusb_transfer *transfer)
 	sr_err("%s: %s", __func__, libusb_error_name(ret));
 }
 
-static size_t convert_sample_data(struct dev_context *devc,
-		uint8_t *dest, size_t destcnt, const uint8_t *src, size_t srccnt)
-{
-	uint16_t *channel_data;
-	int i, cur_channel;
-	size_t ret = 0;
-	uint16_t sample, channel_mask;
-
-	srccnt /= 2;
-
-	channel_data = devc->channel_data;
-	cur_channel = devc->cur_channel;
-
-	while (srccnt--) {
-		sample = src[0] | (src[1] << 8);
-		src += 2;
-
-		channel_mask = devc->channel_masks[cur_channel];
-
-		for (i = 15; i >= 0; --i, sample >>= 1)
-			if (sample & 1)
-				channel_data[i] |= channel_mask;
-
-		if (++cur_channel == devc->num_channels) {
-			cur_channel = 0;
-			if (destcnt < 16 * 2) {
-				sr_err("Conversion buffer too small!");
-				break;
-			}
-			memcpy(dest, channel_data, 16 * 2);
-			memset(channel_data, 0, 16 * 2);
-			dest += 16 * 2;
-			ret += 16;
-			destcnt -= 16 * 2;
-		}
-	}
-
-	devc->cur_channel = cur_channel;
-
-	return ret;
-}
-
 extern volatile int throughput;
 
 SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transfer)
 {
-	gboolean packet_has_error = FALSE;
-	struct sr_datafeed_packet packet;
-	struct sr_datafeed_logic logic;
-	struct sr_dev_inst *sdi;
-	struct dev_context *devc;
-	size_t new_samples, num_samples;
-	int trigger_offset;
-	int pre_trigger_samples;
-
-	sdi = transfer->user_data;
-	devc = sdi->priv;
-
-    //sr_info("logic16_receive_transfer");
-
     if(transfer->status == LIBUSB_TRANSFER_TIMED_OUT){
         sr_err("Timed out");
     }
 
     throughput += transfer->actual_length;
     resubmit_transfer(transfer);
-#if 0
-	/*
-	 * If acquisition has already ended, just free any queued up
-	 * transfer that come in.
-	 */
-	if (devc->sent_samples < 0) {
-		free_transfer(transfer);
-		return;
-	}
-
-	sr_info("receive_transfer(): status %s received %d bytes.",	libusb_error_name(transfer->status), transfer->actual_length);
-
-	switch (transfer->status) {
-	case LIBUSB_TRANSFER_NO_DEVICE:
-		devc->sent_samples = -2;
-		free_transfer(transfer);
-		return;
-	case LIBUSB_TRANSFER_COMPLETED:
-	case LIBUSB_TRANSFER_TIMED_OUT: /* We may have received some data though. */
-                sr_err("Timed out");
-		break;
-	default:
-		packet_has_error = TRUE;
-		break;
-	}
-
-	if (transfer->actual_length & 1) {
-		sr_err("Got an odd number of bytes from the device. "
-		       "This should not happen.");
-		/* Bail out right away. */
-		packet_has_error = TRUE;
-		devc->empty_transfer_count = MAX_EMPTY_TRANSFERS;
-	}
-
-	if (transfer->actual_length == 0 || packet_has_error) {
-		devc->empty_transfer_count++;
-		if (devc->empty_transfer_count > MAX_EMPTY_TRANSFERS) {
-			/*
-			 * The FX2 gave up. End the acquisition, the frontend
-			 * will work out that the samplecount is short.
-			 */
-			devc->sent_samples = -2;
-			free_transfer(transfer);
-		} else {
-			resubmit_transfer(transfer);
-		}
-		return;
-	} else {
-		devc->empty_transfer_count = 0;
-	}
-
-	new_samples = convert_sample_data(devc, devc->convbuffer, devc->convbuffer_size, transfer->buffer, transfer->actual_length);
-
-	if (new_samples > 0) {
-            /* Send the incoming transfer to the session bus. */
-            packet.type = SR_DF_LOGIC;
-            packet.payload = &logic;
-
-            if (devc->limit_samples && new_samples > devc->limit_samples - devc->sent_samples){
-                    new_samples = devc->limit_samples - devc->sent_samples;
-            }
-
-            logic.length = new_samples * 2;
-            logic.unitsize = 2;
-            logic.data = devc->convbuffer;
-            //sr_session_send(devc->cb_data, &packet);
-            devc->sent_samples += new_samples;
-
-            if (devc->limit_samples && (uint64_t)devc->sent_samples >= devc->limit_samples) {
-                    devc->sent_samples = -2;
-                    free_transfer(transfer);
-                    return;
-            }
-	}
-#endif
 }
