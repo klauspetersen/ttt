@@ -36,7 +36,6 @@
 #define USB_CONFIGURATION    1
 #define FX2_FIRMWARE        "saleae-logic16-fx2.fw"
 
-#define MAX_RENUM_DELAY_MS    3000
 #define NUM_SIMUL_TRANSFERS    32
 
 SR_PRIV struct sr_dev_driver saleae_logic16_driver_info;
@@ -353,12 +352,6 @@ static int dev_open(struct sr_dev_inst *sdi) {
 
     if (ret != SR_OK) {
         sr_err("Device failed to renumerate.");
-        return SR_ERR;
-    }
-
-
-    if (ret != SR_OK) {
-        sr_err("Unable to open device.");
         return SR_ERR;
     }
 

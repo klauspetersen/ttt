@@ -24,6 +24,8 @@
 #ifndef LIBSIGROK_LIBSIGROK_INTERNAL_H
 #define LIBSIGROK_LIBSIGROK_INTERNAL_H
 
+#include "config.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <glib.h>
