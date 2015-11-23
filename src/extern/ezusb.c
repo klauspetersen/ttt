@@ -21,13 +21,8 @@
  * Helper functions for the Cypress EZ-USB / FX2 series chips.
  */
 
-#include <config.h>
 #include <libusb.h>
 #include <glib.h>
-#include <glib/gstdio.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
 #include "libsigrok.h"
 #include "libsigrok-internal.h"
 
@@ -49,10 +44,7 @@ SR_PRIV int ezusb_reset(struct libusb_device_handle *hdl, int set_clear){
     return ret;
 }
 
-SR_PRIV int ezusb_install_firmware(struct sr_context *ctx,
-				   libusb_device_handle *hdl,
-				   const char *name)
-{
+SR_PRIV int ezusb_install_firmware(struct sr_context *ctx, libusb_device_handle *hdl, const char *name) {
 	unsigned char *firmware;
 	size_t length, offset, chunksize;
 	int ret, result;
@@ -92,9 +84,7 @@ SR_PRIV int ezusb_install_firmware(struct sr_context *ctx,
 	return result;
 }
 
-SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev,
-				  int configuration, const char *name)
-{
+SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev, int configuration, const char *name) {
 	struct libusb_device_handle *hdl;
 	int ret;
 
@@ -107,15 +97,13 @@ SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev,
 
 	if (libusb_kernel_driver_active(hdl, 0) == 1) {
 		if ((ret = libusb_detach_kernel_driver(hdl, 0)) < 0) {
-			sr_err("failed to detach kernel driver: %s",
-					libusb_error_name(ret));
+			sr_err("failed to detach kernel driver: %s", libusb_error_name(ret));
 			return SR_ERR;
 		}
 	}
 
 	if ((ret = libusb_set_configuration(hdl, configuration)) < 0) {
-		sr_err("Unable to set configuration: %s",
-				libusb_error_name(ret));
+		sr_err("Unable to set configuration: %s", libusb_error_name(ret));
 		return SR_ERR;
 	}
 
@@ -127,6 +115,12 @@ SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev,
 
 	if ((ezusb_reset(hdl, 0)) < 0)
 		return SR_ERR;
+#if 1
+	if ((ret = libusb_reset_device(hdl)) < 0) {
+		sr_err("Unable to reset: %s", libusb_error_name(ret));
+		return SR_ERR;
+	}
+#endif
 
 	libusb_close(hdl);
 
