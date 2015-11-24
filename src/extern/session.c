@@ -47,11 +47,6 @@ struct datafeed_callback {
 	void *cb_data;
 };
 
-
-
-
-
-
 /**
  * Create a new session.
  *
