@@ -175,47 +175,6 @@ SR_API int sr_session_dev_add(struct sr_session *session, struct sr_dev_inst *sd
 }
 
 
-
-/**
- * Add a datafeed callback to a session.
- *
- * @param session The session to use. Must not be NULL.
- * @param cb Function to call when a chunk of data is received.
- *           Must not be NULL.
- * @param cb_data Opaque pointer passed in by the caller.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_BUG No session exists.
- *
- * @since 0.3.0
- */
-SR_API int sr_session_datafeed_callback_add(struct sr_session *session,
-		sr_datafeed_callback cb, void *cb_data)
-{
-	struct datafeed_callback *cb_struct;
-
-	if (!session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_BUG;
-	}
-
-	if (!cb) {
-		sr_err("%s: cb was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-
-	cb_struct = g_malloc0(sizeof(struct datafeed_callback));
-	cb_struct->cb = cb;
-	cb_struct->cb_data = cb_data;
-
-	session->datafeed_callbacks =
-	    g_slist_append(session->datafeed_callbacks, cb_struct);
-
-	return SR_OK;
-}
-
-
-
 /** Set up the main context the session will be executing in.
  *
  * Must be called just before the session starts, by the thread which

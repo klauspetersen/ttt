@@ -25,7 +25,7 @@ static void consumer_recv(){
         cout << "Throughput:" << throughput << endl;
     }
 }
-
+#if 0
 void datafeed_in(const struct sr_dev_inst *sdi, const struct sr_datafeed_packet *packet, void *cb_data){
     /* If the first packet to come in isn't a header, don't even try. */
     struct sr_datafeed_logic *logic;
@@ -46,7 +46,7 @@ void datafeed_in(const struct sr_dev_inst *sdi, const struct sr_datafeed_packet 
         }
     } 
 }
-
+#endif
 
 
 int main()
@@ -71,10 +71,6 @@ int main()
         return 0;
     }
 
-    if(sr_session_datafeed_callback_add(session, datafeed_in, NULL) != SR_OK){
-        g_critical("Failed to add callback");
-    }
-
     if (sr_driver_init(sr_ctx, driver) != SR_OK) {
         g_critical("Failed to initialize driver.");
         return 0;
@@ -85,6 +81,8 @@ int main()
     int i=0;
     for (GSList *l = devices; l; l = l->next) {
         sdiArr[i] = (struct sr_dev_inst *)l->data;
+        sdiArr[i]->id = i;
+        //sdiArr[i]->callback = NULL;
         if(sr_session_dev_add(session, sdiArr[i]) != SR_OK) {
             g_critical("Failed to add device to session.");
             return 0;
@@ -94,6 +92,7 @@ int main()
             g_critical("Failed to open device");
             return 0;
         }
+        i++;
     }
 
     main_loop = g_main_loop_new(NULL, FALSE);

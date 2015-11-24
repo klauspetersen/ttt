@@ -330,24 +330,6 @@ SR_PRIV int sr_variant_type_check(uint32_t key, GVariant *value)
 	return SR_OK;
 }
 
-/**
- * Return the list of supported hardware drivers.
- *
- * @param[in] ctx Pointer to a libsigrok context struct. Must not be NULL.
- *
- * @retval NULL The ctx argument was NULL, or there are no supported drivers.
- * @retval Other Pointer to the NULL-terminated list of hardware drivers.
- *               The user should NOT g_free() this list, sr_exit() will do that.
- *
- * @since 0.4.0
- */
-SR_API struct sr_dev_driver **sr_driver_list(const struct sr_context *ctx)
-{
-	if (!ctx)
-		return NULL;
-
-	return ctx->driver_list;
-}
 
 /**
  * Initialize a hardware driver.
@@ -485,60 +467,6 @@ SR_API GSList *sr_driver_scan(struct sr_dev_driver *driver, GSList *options)
 	return l;
 }
 
-/**
- * Call driver cleanup function for all drivers.
- *
- * @param[in] ctx Pointer to a libsigrok context struct. Must not be NULL.
- *
- * @private
- */
-SR_PRIV void sr_hw_cleanup_all(const struct sr_context *ctx)
-{
-	int i;
-	struct sr_dev_driver **drivers;
-
-	if (!ctx)
-		return;
-
-	drivers = sr_driver_list(ctx);
-	for (i = 0; drivers[i]; i++) {
-		if (drivers[i]->cleanup)
-			drivers[i]->cleanup(drivers[i]);
-		drivers[i]->context = NULL;
-	}
-}
-
-/** Allocate struct sr_config.
- *  A floating reference can be passed in for data.
- *  @private
- */
-SR_PRIV struct sr_config *sr_config_new(uint32_t key, GVariant *data)
-{
-	struct sr_config *src;
-
-	src = g_malloc0(sizeof(struct sr_config));
-	src->key = key;
-	src->data = g_variant_ref_sink(data);
-
-	return src;
-}
-
-/** Free struct sr_config.
- *  @private
- */
-SR_PRIV void sr_config_free(struct sr_config *src)
-{
-
-	if (!src || !src->data) {
-		sr_err("%s: invalid data!", __func__);
-		return;
-	}
-
-	g_variant_unref(src->data);
-	g_free(src);
-
-}
-
 static void log_key(const struct sr_dev_inst *sdi,
 	const struct sr_channel_group *cg, uint32_t key, int op, GVariant *data)
 {
@@ -623,99 +551,6 @@ static int check_key(const struct sr_dev_driver *driver,
 	}
 
 	return SR_OK;
-}
-
-/**
- * Query value of a configuration key at the given driver or device instance.
- *
- * @param[in] driver The sr_dev_driver struct to query.
- * @param[in] sdi (optional) If the key is specific to a device, this must
- *            contain a pointer to the struct sr_dev_inst to be checked.
- *            Otherwise it must be NULL.
- * @param[in] cg The channel group on the device for which to list the
- *                    values, or NULL.
- * @param[in] key The configuration key (SR_CONF_*).
- * @param[in,out] data Pointer to a GVariant where the value will be stored.
- *             Must not be NULL. The caller is given ownership of the GVariant
- *             and must thus decrease the refcount after use. However if
- *             this function returns an error code, the field should be
- *             considered unused, and should not be unreferenced.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR Error.
- * @retval SR_ERR_ARG The driver doesn't know that key, but this is not to be
- *          interpreted as an error by the caller; merely as an indication
- *          that it's not applicable.
- *
- * @since 0.3.0
- */
-SR_API int sr_config_get(const struct sr_dev_driver *driver,
-		const struct sr_dev_inst *sdi,
-		const struct sr_channel_group *cg,
-		uint32_t key, GVariant **data)
-{
-	int ret;
-
-	if (!driver || !data)
-		return SR_ERR;
-
-	if (!driver->config_get)
-		return SR_ERR_ARG;
-
-	if (check_key(driver, sdi, cg, key, SR_CONF_GET, NULL) != SR_OK)
-		return SR_ERR_ARG;
-
-	if ((ret = driver->config_get(key, data, sdi, cg)) == SR_OK) {
-		log_key(sdi, cg, key, SR_CONF_GET, *data);
-		/* Got a floating reference from the driver. Sink it here,
-		 * caller will need to unref when done with it. */
-		g_variant_ref_sink(*data);
-	}
-
-	return ret;
-}
-
-/**
- * Set value of a configuration key in a device instance.
- *
- * @param[in] sdi The device instance.
- * @param[in] cg The channel group on the device for which to list the
- *                    values, or NULL.
- * @param[in] key The configuration key (SR_CONF_*).
- * @param data The new value for the key, as a GVariant with GVariantType
- *        appropriate to that key. A floating reference can be passed
- *        in; its refcount will be sunk and unreferenced after use.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR Error.
- * @retval SR_ERR_ARG The driver doesn't know that key, but this is not to be
- *          interpreted as an error by the caller; merely as an indication
- *          that it's not applicable.
- *
- * @since 0.3.0
- */
-SR_API int sr_config_set(const struct sr_dev_inst *sdi,
-		const struct sr_channel_group *cg,
-		uint32_t key, GVariant *data)
-{
-	int ret;
-
-	g_variant_ref_sink(data);
-
-	if (!sdi || !sdi->driver || !data)
-		ret = SR_ERR;
-	else if (!sdi->driver->config_set)
-		ret = SR_ERR_ARG;
-	else if (check_key(sdi->driver, sdi, cg, key, SR_CONF_SET, data) != SR_OK)
-		return SR_ERR_ARG;
-	else if ((ret = sr_variant_type_check(key, data)) == SR_OK) {
-		log_key(sdi, cg, key, SR_CONF_SET, data);
-		ret = sdi->driver->config_set(key, data, sdi, cg);
-	}
-
-	g_variant_unref(data);
-
-	return ret;
 }
 
 /**
@@ -830,35 +665,6 @@ SR_API const struct sr_key_info *sr_key_info_get(int keytype, uint32_t key)
 
 	for (i = 0; table[i].key; i++) {
 		if (table[i].key == key)
-			return &table[i];
-	}
-
-	return NULL;
-}
-
-/**
- * Get information about a key, by name.
- *
- * @param[in] keytype The namespace the key is in.
- * @param[in] keyid The key id string.
- *
- * @return A pointer to a struct sr_key_info, or NULL if the key
- *         was not found.
- *
- * @since 0.2.0
- */
-SR_API const struct sr_key_info *sr_key_info_name_get(int keytype, const char *keyid)
-{
-	struct sr_key_info *table;
-	int i;
-
-	if (!(table = get_keytable(keytype)))
-		return NULL;
-
-	for (i = 0; table[i].key; i++) {
-		if (!table[i].id)
-			continue;
-		if (!strcmp(table[i].id, keyid))
 			return &table[i];
 	}
 

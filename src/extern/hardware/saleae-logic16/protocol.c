@@ -480,8 +480,7 @@ static int upload_fpga_bitstream(const struct sr_dev_inst *sdi, enum voltage_ran
 		}
 
 		sr_info("Uploading FPGA bitstream '%s'.", name);
-		ret = sr_resource_open(drvc->sr_ctx, &bitstream,
-				SR_RESOURCE_FIRMWARE, name);
+		ret = sr_resource_open(drvc->sr_ctx, &bitstream, SR_RESOURCE_FIRMWARE, name);
 		if (ret != SR_OK)
 			return ret;
 
@@ -749,7 +748,9 @@ SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transf
         sr_err("Timed out");
     }
 
-	if(libusb_submit_transfer(transfer) != LIBUSB_SUCCESS){
+	const struct sr_dev_inst *sdi = transfer->user_data;
+
+	if((ret =libusb_submit_transfer(transfer)) != LIBUSB_SUCCESS){
 		sr_err("%s: %s", __func__, libusb_error_name(ret));
 	}
 

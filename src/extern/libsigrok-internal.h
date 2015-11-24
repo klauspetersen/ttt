@@ -122,6 +122,8 @@ SR_PRIV struct sr_channel *sr_channel_new(struct sr_dev_inst *sdi,
 
 /** Device instance data */
 struct sr_dev_inst {
+    /** Device id **/
+    int id;
 	/** Device driver. */
 	struct sr_dev_driver *driver;
 	/** Device instance status. SR_ST_NOT_FOUND, etc. */
@@ -160,6 +162,12 @@ SR_PRIV struct sr_usb_dev_inst *sr_usb_dev_inst_new(uint8_t bus,
 SR_PRIV void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb);
 #endif
 
+#ifdef HAVE_LIBUSB_1_0
+SR_PRIV GSList *sr_usb_find(libusb_context *usb_ctx, const char *conn);
+SR_PRIV int usb_source_add(struct sr_session *session, struct sr_context *ctx, int timeout, sr_receive_data_callback cb, void *cb_data);
+SR_PRIV int usb_get_port_path(libusb_device *dev, char *path, int path_len);
+#endif
+
 
 /*--- hwdriver.c ------------------------------------------------------------*/
 
@@ -174,9 +182,7 @@ struct sr_session {
 	struct sr_context *ctx;
 	/** List of struct sr_dev_inst pointers. */
 	GSList *devs;
-	/** List of struct sr_dev_inst pointers owned by this session. */
-	/** List of struct datafeed_callback pointers. */
-	GSList *datafeed_callbacks;
+
 
 	/** Callback to invoke on session stop. */
 	sr_session_stopped_callback stopped_callback;

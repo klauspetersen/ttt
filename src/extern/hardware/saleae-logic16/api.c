@@ -664,6 +664,7 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi, void *cb_data) {
 
         sr_info("libusb_alloc_transfer");
 
+        sr_info("sdi id: %d", sdi->id);
         transfer = libusb_alloc_transfer(0);
         libusb_fill_bulk_transfer(transfer, usb->devhdl, 2 | LIBUSB_ENDPOINT_IN, buf, size, logic16_receive_transfer, (void *) sdi, 5000);
         if ((ret = libusb_submit_transfer(transfer)) != 0) {

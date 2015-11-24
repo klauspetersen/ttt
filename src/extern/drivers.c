@@ -25,13 +25,4 @@
 extern SR_PRIV struct sr_dev_driver saleae_logic16_driver_info;
 #endif
 
-#define DRVS struct sr_dev_driver *[]
-
-SR_PRIV struct sr_dev_driver **drivers_lists[] = {
-
-#ifdef HAVE_HW_SALEAE_LOGIC16
-	(DRVS) {&saleae_logic16_driver_info, NULL},
-#endif
-	NULL
-};
 /** @endcond */

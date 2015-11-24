@@ -463,99 +463,6 @@ struct sr_context;
  */
 struct sr_session;
 
-struct sr_rational {
-	/** Numerator of the rational number. */
-	int64_t p;
-	/** Denominator of the rational number. */
-	uint64_t q;
-};
-
-/** Packet in a sigrok data feed. */
-struct sr_datafeed_packet {
-	uint16_t type;
-	const void *payload;
-};
-
-/** Header of a sigrok data feed. */
-struct sr_datafeed_header {
-	int feed_version;
-	struct timeval starttime;
-};
-
-/** Datafeed payload for type SR_DF_META. */
-struct sr_datafeed_meta {
-	GSList *config;
-};
-
-/** Logic datafeed payload for type SR_DF_LOGIC. */
-struct sr_datafeed_logic {
-	uint64_t length;
-	uint16_t unitsize;
-	void *data;
-};
-
-/** Analog datafeed payload for type SR_DF_ANALOG_OLD. */
-struct sr_datafeed_analog_old {
-	/** The channels for which data is included in this packet. */
-	GSList *channels;
-	/** Number of samples in data */
-	int num_samples;
-	/** Measured quantity (voltage, current, temperature, and so on).
-	 *  Use SR_MQ_VOLTAGE, ... */
-	int mq;
-	/** Unit in which the MQ is measured. Use SR_UNIT_VOLT, ... */
-	int unit;
-	/** Bitmap with extra information about the MQ. Use SR_MQFLAG_AC, ... */
-	uint64_t mqflags;
-	/** The analog value(s). The data is interleaved according to
-	 * the channels list. */
-	float *data;
-};
-
-/** Analog datafeed payload for type SR_DF_ANALOG. */
-struct sr_datafeed_analog {
-	void *data;
-	uint32_t num_samples;
-	struct sr_analog_encoding *encoding;
-	struct sr_analog_meaning *meaning;
-	struct sr_analog_spec *spec;
-};
-
-struct sr_analog_encoding {
-	uint8_t unitsize;
-	gboolean is_signed;
-	gboolean is_float;
-	gboolean is_bigendian;
-	uint8_t digits;
-	gboolean is_digits_decimal;
-	struct sr_rational scale;
-	struct sr_rational offset;
-};
-
-struct sr_analog_meaning {
-	enum sr_mq mq;
-	enum sr_unit unit;
-	enum sr_mqflag mqflags;
-	GSList *channels;
-};
-
-struct sr_analog_spec {
-	uint8_t spec_digits;
-};
-
-/** Generic option struct used by various subsystems. */
-struct sr_option {
-	/* Short name suitable for commandline usage, [a-z0-9-]. */
-	const char *id;
-	/* Short name suitable for GUI usage, can contain UTF-8. */
-	const char *name;
-	/* Description of the option, in a sentence. */
-	const char *desc;
-	/* Default value for this option. */
-	GVariant *def;
-	/* List of possible values, if this is an option with few values. */
-	GSList *values;
-};
 
 /** Resource type.
  * @since 0.4.0
@@ -574,12 +481,6 @@ struct sr_resource {
 	void *handle;
 	/** Resource type (SR_RESOURCE_FIRMWARE, ...) */
 	int type;
-};
-
-/** Output module flags. */
-enum sr_output_flag {
-	/** If set, this output module writes the output itself. */
-	SR_OUTPUT_INTERNAL_IO_HANDLING = 0x01,
 };
 
 struct sr_input;
