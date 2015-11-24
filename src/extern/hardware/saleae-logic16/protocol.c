@@ -687,7 +687,6 @@ SR_PRIV int logic16_abort_acquisition(const struct sr_dev_inst *sdi){
 		return SR_ERR;
 	}
 
-
 	if (devc->fpga_variant == FPGA_VARIANT_ORIGINAL) {
 		uint8_t reg8, reg9;
 
@@ -741,52 +740,6 @@ SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi){
 	return SR_OK;
 }
 
-static void finish_acquisition(struct sr_dev_inst *sdi)
-{
-
-	struct sr_datafeed_packet packet;
-	struct dev_context *devc;
-
-    sr_info("finish_acquisition");
-
-	devc = sdi->priv;
-
-	/* Terminate session. */
-	packet.type = SR_DF_END;
-	sr_session_send(devc->cb_data, &packet);
-
-	/* Remove fds from polling. */
-	usb_source_remove(sdi->session, devc->ctx);
-
-	devc->num_transfers = 0;
-	g_free(devc->transfers);
-	g_free(devc->convbuffer);
-}
-
-static void free_transfer(struct libusb_transfer *transfer)
-{
-	struct sr_dev_inst *sdi;
-	struct dev_context *devc;
-	unsigned int i;
-
-	sdi = transfer->user_data;
-	devc = sdi->priv;
-
-	g_free(transfer->buffer);
-	transfer->buffer = NULL;
-	libusb_free_transfer(transfer);
-
-	for (i = 0; i < devc->num_transfers; i++) {
-		if (devc->transfers[i] == transfer) {
-			devc->transfers[i] = NULL;
-			break;
-		}
-	}
-
-	devc->submitted_transfers--;
-	if (devc->submitted_transfers == 0)
-		finish_acquisition(sdi);
-}
 
 static void resubmit_transfer(struct libusb_transfer *transfer)
 {
@@ -796,9 +749,6 @@ static void resubmit_transfer(struct libusb_transfer *transfer)
 
 	if ((ret = libusb_submit_transfer(transfer)) == LIBUSB_SUCCESS)
 		return;
-
-	free_transfer(transfer);
-	/* TODO: Stop session? */
 
 	sr_err("%s: %s", __func__, libusb_error_name(ret));
 }

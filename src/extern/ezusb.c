@@ -115,12 +115,11 @@ SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev, in
 
 	if ((ezusb_reset(hdl, 0)) < 0)
 		return SR_ERR;
-#if 1
+
 	if ((ret = libusb_reset_device(hdl)) < 0) {
 		sr_err("Unable to reset: %s", libusb_error_name(ret));
 		return SR_ERR;
 	}
-#endif
 
 	libusb_close(hdl);
 

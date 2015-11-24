@@ -73,7 +73,6 @@ struct dev_context {
 	uint16_t channel_data[16];
 	uint8_t *convbuffer;
 
-	void *cb_data;
 	unsigned int num_transfers;
 	struct libusb_transfer **transfers;
 	struct sr_context *ctx;

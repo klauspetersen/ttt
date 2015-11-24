@@ -622,7 +622,6 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi, void *cb_data) {
         return SR_ERR;
     }
 
-    devc->cb_data = cb_data;
     devc->sent_samples = 0;
     memset(devc->channel_data, 0, sizeof(devc->channel_data));
 

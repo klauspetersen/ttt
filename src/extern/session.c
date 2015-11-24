@@ -27,6 +27,7 @@
 #define LOG_PREFIX "session"
 /** @endcond */
 
+
 /**
  * @file
  *
@@ -45,6 +46,9 @@ struct datafeed_callback {
 	sr_datafeed_callback cb;
 	void *cb_data;
 };
+
+
+
 
 
 
@@ -464,106 +468,6 @@ SR_API int sr_session_start(struct sr_session *session)
 	return SR_OK;
 }
 
-
-
-/**
- * Debug helper.
- *
- * @param packet The packet to show debugging information for.
- */
-static void datafeed_dump(const struct sr_datafeed_packet *packet)
-{
-	const struct sr_datafeed_logic *logic;
-	const struct sr_datafeed_analog_old *analog_old;
-	const struct sr_datafeed_analog *analog;
-
-	/* Please use the same order as in libsigrok.h. */
-	switch (packet->type) {
-	case SR_DF_HEADER:
-		sr_dbg("bus: Received SR_DF_HEADER packet.");
-		break;
-	case SR_DF_END:
-		sr_dbg("bus: Received SR_DF_END packet.");
-		break;
-	case SR_DF_META:
-		sr_dbg("bus: Received SR_DF_META packet.");
-		break;
-	case SR_DF_TRIGGER:
-		sr_dbg("bus: Received SR_DF_TRIGGER packet.");
-		break;
-	case SR_DF_LOGIC:
-		logic = packet->payload;
-		sr_dbg("bus: Received SR_DF_LOGIC packet (%" PRIu64 " bytes, "
-		       "unitsize = %d).", logic->length, logic->unitsize);
-		break;
-	case SR_DF_ANALOG_OLD:
-		analog_old = packet->payload;
-		sr_dbg("bus: Received SR_DF_ANALOG_OLD packet (%d samples).",
-		       analog_old->num_samples);
-		break;
-	case SR_DF_FRAME_BEGIN:
-		sr_dbg("bus: Received SR_DF_FRAME_BEGIN packet.");
-		break;
-	case SR_DF_FRAME_END:
-		sr_dbg("bus: Received SR_DF_FRAME_END packet.");
-		break;
-	case SR_DF_ANALOG:
-		analog = packet->payload;
-		sr_dbg("bus: Received SR_DF_ANALOG packet (%d samples).",
-		       analog->num_samples);
-		break;
-	default:
-		sr_dbg("bus: Received unknown packet type: %d.", packet->type);
-		break;
-	}
-}
-
-/**
- * Send a packet to whatever is listening on the datafeed bus.
- *
- * Hardware drivers use this to send a data packet to the frontend.
- *
- * @param sdi TODO.
- * @param packet The datafeed packet to send to the session bus.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_ARG Invalid argument.
- *
- * @private
- */
-SR_PRIV int sr_session_send(const struct sr_dev_inst *sdi,
-		const struct sr_datafeed_packet *packet)
-{
-	GSList *l;
-	struct datafeed_callback *cb_struct;
-
-	if (!sdi) {
-		sr_err("%s: sdi was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-
-	if (!packet) {
-		sr_err("%s: packet was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-
-	if (!sdi->session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_BUG;
-	}
-
-	/*
-	 * Pass the packet to all callbacks.
-	 */
-	for (l = sdi->session->datafeed_callbacks; l; l = l->next) {
-		if (sr_log_loglevel_get() >= SR_LOG_DBG)
-			datafeed_dump(packet);
-		cb_struct = l->data;
-		cb_struct->cb(sdi, packet, cb_struct->cb_data);
-	}
-
-	return SR_OK;
-}
 
 /**
  * Add an event source for a file descriptor.

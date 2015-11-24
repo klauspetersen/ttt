@@ -208,8 +208,7 @@ SR_PRIV int sr_session_source_remove_internal(struct sr_session *session,
 		void *key);
 SR_PRIV int sr_session_source_destroyed(struct sr_session *session,
 		void *key, GSource *source);
-SR_PRIV int sr_session_send(const struct sr_dev_inst *sdi,
-		const struct sr_datafeed_packet *packet);
+
 
 
 /*--- session_file.c --------------------------------------------------------*/
