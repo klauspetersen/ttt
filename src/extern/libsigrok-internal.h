@@ -163,13 +163,9 @@ SR_PRIV void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb);
 
 /*--- hwdriver.c ------------------------------------------------------------*/
 
-extern SR_PRIV struct sr_dev_driver **drivers_lists[];
-
 SR_PRIV const GVariantType *sr_variant_type_get(int datatype);
 SR_PRIV int sr_variant_type_check(uint32_t key, GVariant *data);
-SR_PRIV void sr_hw_cleanup_all(const struct sr_context *ctx);
-SR_PRIV struct sr_config *sr_config_new(uint32_t key, GVariant *data);
-SR_PRIV void sr_config_free(struct sr_config *src);
+
 
 /*--- session.c -------------------------------------------------------------*/
 
@@ -202,25 +198,16 @@ struct sr_session {
 	gboolean running;
 };
 
-SR_PRIV int sr_session_source_add_internal(struct sr_session *session,
-		void *key, GSource *source);
-SR_PRIV int sr_session_source_remove_internal(struct sr_session *session,
-		void *key);
-SR_PRIV int sr_session_source_destroyed(struct sr_session *session,
-		void *key, GSource *source);
-
-
+SR_PRIV int sr_session_source_add_internal(struct sr_session *session, void *key, GSource *source);
+SR_PRIV int sr_session_source_remove_internal(struct sr_session *session, void *key);
+SR_PRIV int sr_session_source_destroyed(struct sr_session *session,	void *key, GSource *source);
 
 /*--- session_file.c --------------------------------------------------------*/
 
-
 typedef void (*std_dev_clear_callback)(void *priv);
 
-SR_PRIV int std_init(struct sr_context *sr_ctx, struct sr_dev_driver *di,
-		const char *prefix);
-
-SR_PRIV int std_dev_clear(const struct sr_dev_driver *driver,
-		std_dev_clear_callback clear_private);
+SR_PRIV int std_init(struct sr_context *sr_ctx, struct sr_dev_driver *di, const char *prefix);
+SR_PRIV int std_dev_clear(const struct sr_dev_driver *driver,std_dev_clear_callback clear_private);
 
 /*--- resource.c ------------------------------------------------------------*/
 
@@ -246,26 +233,9 @@ SR_PRIV void *sr_resource_load(struct sr_context *ctx, int type,
 
 #ifdef HAVE_LIBUSB_1_0
 SR_PRIV int ezusb_reset(struct libusb_device_handle *hdl, int set_clear);
-SR_PRIV int ezusb_install_firmware(struct sr_context *ctx, libusb_device_handle *hdl,
-				   const char *name);
-SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev,
-				  int configuration, const char *name);
+SR_PRIV int ezusb_install_firmware(struct sr_context *ctx, libusb_device_handle *hdl, const char *name);
+SR_PRIV int ezusb_upload_firmware(struct sr_context *ctx, libusb_device *dev, int configuration, const char *name);
 #endif
-
-/*--- hardware/usb.c --------------------------------------------------------*/
-
-#ifdef HAVE_LIBUSB_1_0
-SR_PRIV GSList *sr_usb_find(libusb_context *usb_ctx, const char *conn);
-SR_PRIV int sr_usb_open(libusb_context *usb_ctx, struct sr_usb_dev_inst *usb);
-SR_PRIV void sr_usb_close(struct sr_usb_dev_inst *usb);
-SR_PRIV int usb_source_add(struct sr_session *session, struct sr_context *ctx,
-		int timeout, sr_receive_data_callback cb, void *cb_data);
-SR_PRIV int usb_source_remove(struct sr_session *session, struct sr_context *ctx);
-SR_PRIV int usb_get_port_path(libusb_device *dev, char *path, int path_len);
-#endif
-
-
-
 
 
 #endif

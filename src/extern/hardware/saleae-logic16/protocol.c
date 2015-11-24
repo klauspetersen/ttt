@@ -734,33 +734,24 @@ SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi){
 	}
 
 	ret = upload_fpga_bitstream(sdi, devc->selected_voltage_range);
-	if (ret != SR_OK)
-		return ret;
+	if (ret != SR_OK){
+		sr_err("Bitstream upload failed");
+	}
 
-	return SR_OK;
-}
-
-
-static void resubmit_transfer(struct libusb_transfer *transfer)
-{
-	int ret;
-
-    //sr_info("resubmit_transfer");
-
-	if ((ret = libusb_submit_transfer(transfer)) == LIBUSB_SUCCESS)
-		return;
-
-	sr_err("%s: %s", __func__, libusb_error_name(ret));
+	return ret;
 }
 
 extern volatile int throughput;
 
-SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transfer)
-{
+SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transfer){
+	int ret;
     if(transfer->status == LIBUSB_TRANSFER_TIMED_OUT){
         sr_err("Timed out");
     }
 
+	if(libusb_submit_transfer(transfer) != LIBUSB_SUCCESS){
+		sr_err("%s: %s", __func__, libusb_error_name(ret));
+	}
+
     throughput += transfer->actual_length;
-    resubmit_transfer(transfer);
 }

@@ -7,12 +7,14 @@
 #include "ProducerConsumerQueue.h"
 
 #define LOG_PREFIX "main"
+#define MAX_DEVICES 3
 
 using namespace std;
 
 extern SR_PRIV struct sr_dev_driver saleae_logic16_driver_info;
 
 volatile int throughput;
+struct sr_dev_inst *sdiArr[MAX_DEVICES];
 
 //folly::ProducerConsumerQueue<folly::fbstring> queue;
 struct sr_context *sr_ctx = NULL;
@@ -46,12 +48,12 @@ void datafeed_in(const struct sr_dev_inst *sdi, const struct sr_datafeed_packet 
 }
 
 
+
 int main()
 {
     struct sr_dev_inst *sdi;
     struct sr_dev_driver *driver;
     struct sr_session *session;
-    GSList *devices, *l;
     GMainLoop *main_loop;
 
     std::thread consumer_thread(consumer_recv);  
@@ -78,17 +80,17 @@ int main()
         return 0;
     }
 
-    devices = sr_driver_scan(driver, NULL);
+    GSList *devices = sr_driver_scan(driver, NULL);
 
-    for (l = devices; l; l = l->next) {
-    	sdi = (struct sr_dev_inst *)l->data;
-
-        if(sr_session_dev_add(session, sdi) != SR_OK) {
+    int i=0;
+    for (GSList *l = devices; l; l = l->next) {
+        sdiArr[i] = (struct sr_dev_inst *)l->data;
+        if(sr_session_dev_add(session, sdiArr[i]) != SR_OK) {
             g_critical("Failed to add device to session.");
             return 0;
         }
 
-        if(sr_dev_open(sdi) != SR_OK){
+        if(sr_dev_open(sdiArr[i]) != SR_OK){
             g_critical("Failed to open device");
             return 0;
         }
