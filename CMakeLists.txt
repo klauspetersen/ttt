@@ -12,6 +12,7 @@ include_directories(${GLIB2_INCLUDE_DIRS})
 include_directories(/usr/include/libusb-1.0)
 include_directories(src/extern/include)
 include_directories(src/extern)
+include_directories(src/extern/trace)
 
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++11")
@@ -28,7 +29,21 @@ file(GLOB EXTERN_HARDWARE_SOURCES
 
 set(SOURCE_FILES src/main.cpp)
 
-add_executable(ttt ${SOURCE_FILES} ${EXTERN_HARDWARE_SOURCES} ${EXTERN_SOURCES})
+set(SOURCE_EXTERN_TRACE_SOURCES
+        "src/extern/trace/raw_sampler.cpp"
+        "src/extern/trace/raw_trace.cpp"
+        "src/extern/trace/sw_decode.cpp"
+        "src/extern/trace/sw_sampler.cpp"
+        "src/extern/trace/sw_trace.cpp"
+        "src/extern/trace/xble_common.cpp"
+        "src/extern/trace/xble_decoder.cpp"
+        "src/extern/trace/xble_link.cpp"
+        "src/extern/trace/xble_rx_sampler.cpp"
+        "src/extern/trace/xble_trace.cpp"
+        "src/extern/trace/xble_tx_sampler.cpp"
+        )
+
+add_executable(ttt ${SOURCE_FILES} ${EXTERN_HARDWARE_SOURCES} ${EXTERN_SOURCES} ${SOURCE_EXTERN_TRACE_SOURCES})
 set_target_properties(ttt PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
 target_link_libraries (ttt ${GLIB2_LIBRARIES})
 target_link_libraries (ttt ${CMAKE_THREAD_LIBS_INIT})

@@ -2,8 +2,7 @@
 #include <glib.h>
 #include <unistd.h>
 #include <thread>
-#include "libsigrok.h"
-#include "libsigrok-internal.h"
+#include <libsigrok-internal.h>
 #include "ProducerConsumerQueue.h"
 
 #define LOG_PREFIX "main"
@@ -16,8 +15,24 @@ extern SR_PRIV struct sr_dev_driver saleae_logic16_driver_info;
 volatile int throughput;
 struct sr_dev_inst *sdiArr[MAX_DEVICES];
 
-//folly::ProducerConsumerQueue<folly::fbstring> queue;
 struct sr_context *sr_ctx = NULL;
+
+char *byte2bin(uint8_t value, char *buf){
+    uint8_t i;
+
+    buf[8] = '\0';
+    for (i = 0; i < 8; i++){
+        if(value & 1){
+            buf[7 - i] = '1';
+        } else {
+            buf[7 - i] = '0';
+        }
+        value = value >> 1;
+    }
+    return buf;
+}
+
+
 static void consumer_recv(){
     while(1){
         throughput = 0;
@@ -25,28 +40,15 @@ static void consumer_recv(){
         cout << "Throughput:" << throughput << endl;
     }
 }
-#if 0
-void datafeed_in(const struct sr_dev_inst *sdi, const struct sr_datafeed_packet *packet, void *cb_data){
-    /* If the first packet to come in isn't a header, don't even try. */
-    struct sr_datafeed_logic *logic;
-    uint8_t data;
+static void sr_data_recv_cb(sr_packet_t *packet){
+    char buf[9];
 
-    (void)cb_data;
-    (void)sdi;
-
-    if (packet->type != SR_DF_HEADER){
-        logic = (struct sr_datafeed_logic *)packet->payload;
-   
-        cout << "Data" << endl;
-        for(int i=0; i<logic->length; i++){
-            data = ((uint8_t *)(logic->data))[i];
-            if(data != 0){
-                //cout << "value is " << unsigned(data) << endl;
-            }
-        }
-    } 
+    for(int i=0; i< packet->size; i++){
+        //printf("%s\n", byte2bin(((uint8_t*)packet->data)[i], buf));
+        printf("%d\n", ((uint8_t*)packet->data)[i]);
+    }
 }
-#endif
+
 
 
 int main()
@@ -82,7 +84,7 @@ int main()
     for (GSList *l = devices; l; l = l->next) {
         sdiArr[i] = (struct sr_dev_inst *)l->data;
         sdiArr[i]->id = i;
-        //sdiArr[i]->callback = NULL;
+        sdiArr[i]->cb = sr_data_recv_cb;
         if(sr_session_dev_add(session, sdiArr[i]) != SR_OK) {
             g_critical("Failed to add device to session.");
             return 0;

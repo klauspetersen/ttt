@@ -23,6 +23,7 @@
 #include <string.h>
 #include <glib.h>
 #include <math.h>
+#include <libsigrok-internal.h>
 #include "libsigrok.h"
 #include "libsigrok-internal.h"
 #include "protocol.h"
@@ -744,11 +745,23 @@ extern volatile int throughput;
 
 SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transfer){
 	int ret;
+	sr_packet_t packet;
+	const struct sr_dev_inst *sdi = transfer->user_data;
+
     if(transfer->status == LIBUSB_TRANSFER_TIMED_OUT){
         sr_err("Timed out");
     }
 
-	const struct sr_dev_inst *sdi = transfer->user_data;
+	packet.data = (void *)transfer->buffer;
+	packet.size = transfer->length;
+	packet.id = sdi->id;
+
+	for(int i= 0; i < transfer->length; i++){
+		if(transfer->buffer[i] != 0){
+			sdi->cb(&packet);
+		}
+	}
+
 
 	if((ret =libusb_submit_transfer(transfer)) != LIBUSB_SUCCESS){
 		sr_err("%s: %s", __func__, libusb_error_name(ret));

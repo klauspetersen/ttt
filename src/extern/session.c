@@ -458,39 +458,6 @@ SR_PRIV int sr_session_source_add_internal(struct sr_session *session,
 	return SR_OK;
 }
 
-
-
-/**
- * Remove the source identified by the specified poll object.
- *
- * @param session The session to use. Must not be NULL.
- * @param key The key by which the source is identified.
- *
- * @retval SR_OK Success
- * @retval SR_ERR_BUG No event source for poll_object found.
- *
- * @private
- */
-SR_PRIV int sr_session_source_remove_internal(struct sr_session *session, void *key){
-	GSource *source;
-
-	source = g_hash_table_lookup(session->event_sources, key);
-	/*
-	 * Trying to remove an already removed event source is problematic
-	 * since the poll_object handle may have been reused in the meantime.
-	 */
-	if (!source) {
-		sr_warn("Cannot remove non-existing event source %p.", key);
-		return SR_ERR_BUG;
-	}
-	g_source_destroy(source);
-
-	return SR_OK;
-}
-
-
-
-
 /** Unregister an event source that has been destroyed.
  *
  * This is intended to be called from a source's finalize() method.

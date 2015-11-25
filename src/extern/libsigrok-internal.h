@@ -30,6 +30,7 @@
 #include <glib.h>
 #ifdef HAVE_LIBUSB_1_0
 #include <libusb.h>
+#include "libsigrok.h"
 #endif
 
 
@@ -120,10 +121,20 @@ SR_PRIV int sr_log(int loglevel, const char *format, ...) G_GNUC_PRINTF(2, 3);
 SR_PRIV struct sr_channel *sr_channel_new(struct sr_dev_inst *sdi,
 		int index, int type, gboolean enabled, const char *name);
 
+typedef struct {
+    int id;
+    void *data;
+    ssize_t size;
+} sr_packet_t;
+
+typedef void (*sr_callback_t)(sr_packet_t *packet);
+
 /** Device instance data */
 struct sr_dev_inst {
     /** Device id **/
     int id;
+    /** Device callback */
+    sr_callback_t cb;
 	/** Device driver. */
 	struct sr_dev_driver *driver;
 	/** Device instance status. SR_ST_NOT_FOUND, etc. */
