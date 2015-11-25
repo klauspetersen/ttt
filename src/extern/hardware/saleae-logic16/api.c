@@ -631,6 +631,7 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi, void *cb_data) {
     convsize = (size / devc->num_channels + 2) * 16;
     devc->submitted_transfers = 0;
 
+    devc->convbuffer_size = convsize;
     if (!(devc->convbuffer = g_try_malloc(convsize))) {
         sr_err("Conversion buffer malloc failed.");
         return SR_ERR_MALLOC;

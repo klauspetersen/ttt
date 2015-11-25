@@ -741,27 +741,75 @@ SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi){
 	return ret;
 }
 
+static size_t convert_sample_data(struct dev_context *devc, uint8_t *dest, size_t destcnt, const uint8_t *src, size_t srccnt){
+    uint16_t *channel_data;
+    int i, cur_channel;
+    size_t ret = 0;
+    uint16_t sample, channel_mask;
+
+    srccnt /= 2;
+
+    channel_data = devc->channel_data;
+    cur_channel = devc->cur_channel;
+
+    while (srccnt--) {
+        sample = src[0] | (src[1] << 8);
+        src += 2;
+
+        channel_mask = devc->channel_masks[cur_channel];
+
+        for (i = 15; i >= 0; --i, sample >>= 1)
+            if (sample & 1)
+                channel_data[i] |= channel_mask;
+
+        if (++cur_channel == devc->num_channels) {
+            cur_channel = 0;
+            if (destcnt < 16 * 2) {
+                sr_err("Conversion buffer too small!");
+                break;
+            }
+            memcpy(dest, channel_data, 16 * 2);
+            memset(channel_data, 0, 16 * 2);
+            dest += 16 * 2;
+            ret += 16;
+            destcnt -= 16 * 2;
+        }
+    }
+
+    devc->cur_channel = cur_channel;
+
+    return ret;
+}
+
+
 extern volatile int throughput;
+
+
 
 SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transfer){
 	int ret;
 	sr_packet_t packet;
 	const struct sr_dev_inst *sdi = transfer->user_data;
+    struct dev_context *devc = sdi->priv;
+    size_t new_samples, num_samples;
+
 
     if(transfer->status == LIBUSB_TRANSFER_TIMED_OUT){
         sr_err("Timed out");
     }
 
-	packet.data = (void *)transfer->buffer;
-	packet.size = transfer->length;
-	packet.id = sdi->id;
+    new_samples = convert_sample_data(devc, devc->convbuffer, devc->convbuffer_size, transfer->buffer, transfer->actual_length);
+
+    packet.data = (void *)devc->convbuffer;
+    //packet.data = (void *)transfer->buffer;
+    packet.size = transfer->length;
+    packet.id = sdi->id;
 
 	for(int i= 0; i < transfer->length; i++){
 		if(transfer->buffer[i] != 0){
 			sdi->cb(&packet);
 		}
 	}
-
 
 	if((ret =libusb_submit_transfer(transfer)) != LIBUSB_SUCCESS){
 		sr_err("%s: %s", __func__, libusb_error_name(ret));

@@ -71,7 +71,10 @@ struct dev_context {
 	int num_channels;
 	uint16_t channel_masks[16];
 	uint16_t channel_data[16];
+	int cur_channel;
 	uint8_t *convbuffer;
+	size_t convbuffer_size;
+
 
 	unsigned int num_transfers;
 	struct libusb_transfer **transfers;

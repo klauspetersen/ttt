@@ -45,7 +45,9 @@ static void sr_data_recv_cb(sr_packet_t *packet){
 
     for(int i=0; i< packet->size; i++){
         //printf("%s\n", byte2bin(((uint8_t*)packet->data)[i], buf));
-        printf("%d\n", ((uint8_t*)packet->data)[i]);
+        if(((uint8_t*)packet->data)[i] != 0) {
+            printf("%d\n", ((uint8_t *) packet->data)[i]);
+        }
     }
 }
 
