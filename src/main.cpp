@@ -4,6 +4,7 @@
 #include <thread>
 #include <libsigrok-internal.h>
 #include "ProducerConsumerQueue.h"
+#include "emmintrin.h"
 
 #define LOG_PREFIX "main"
 #define MAX_DEVICES 3
@@ -32,6 +33,15 @@ char *byte2bin(uint8_t value, char *buf){
     return buf;
 }
 
+__m128i sse_trans_slice(__m128i x)
+{
+    union { unsigned short s[8]; __m128i m; } u;
+    for (int i = 0; i < 8; ++i) {
+        u.s[7-i]=_mm_movemask_epi8(x);
+        x = _mm_slli_epi64(x,1);
+    }
+    return  u.m;
+}
 
 static void consumer_recv(){
     while(1){
@@ -51,7 +61,26 @@ static void sr_data_recv_cb(sr_packet_t *packet){
     }
 }
 
+uint8_t* z;
 
+uint8_t arr[] = {
+        0xFF,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00,
+        0x00
+};
 
 int main()
 {
@@ -59,6 +88,13 @@ int main()
     struct sr_dev_driver *driver;
     struct sr_session *session;
     GMainLoop *main_loop;
+
+    __m128i x = _mm_loadu_si128((__m128i *)arr);
+
+    __m128i y = sse_trans_slice(x);
+
+    //z = (uint8_t *)y;
+
 
     std::thread consumer_thread(consumer_recv);  
 
