@@ -3,8 +3,8 @@
 #include <unistd.h>
 #include <thread>
 #include <libsigrok-internal.h>
+#include <tmmintrin.h>
 #include "ProducerConsumerQueue.h"
-#include "emmintrin.h"
 
 #define LOG_PREFIX "main"
 #define MAX_DEVICES 3
@@ -61,26 +61,60 @@ static void sr_data_recv_cb(sr_packet_t *packet){
     }
 }
 
-uint8_t* z;
-
-uint8_t arr[] = {
-        0xFF,
+uint8_t arrVal[] = {
         0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x00
+        0x01,
+        0x02,
+        0x03,
+        0x04,
+        0x05,
+        0x06,
+        0x07,
+        0x08,
+        0x09,
+        0x0A,
+        0x0B,
+        0x0C,
+        0x0D,
+        0x0E,
+        0x0F
 };
+
+
+uint8_t arrMask[] = {
+        0x01,
+        0x01,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80,
+        0x80
+};
+#if 0
+static void data_convert(uint8_t *src, uint8_t *dst, uint32_t length){
+    assert(length%128==0);
+
+    __m128i x = _mm_loadu_si128((__m128i *)src);
+
+    __m128i y = sse_trans_slice(x);
+
+
+}
+#endif
+
+typedef union{
+    __m128i x;
+    uint8_t y[16];
+} _mmi_mask;
 
 int main()
 {
@@ -89,14 +123,16 @@ int main()
     struct sr_session *session;
     GMainLoop *main_loop;
 
-    __m128i x = _mm_loadu_si128((__m128i *)arr);
+    __m128i x = _mm_loadu_si128((__m128i *)arrVal);
+
+    __m128i maskv = _mm_load_si128((__m128i *)arrMask);
+
+    x = _mm_shuffle_epi8(x, maskv);
 
     __m128i y = sse_trans_slice(x);
 
-    //z = (uint8_t *)y;
 
-
-    std::thread consumer_thread(consumer_recv);  
+    //std::thread consumer_thread(consumer_recv);
 
     cout << "trace_fast!" << endl;
     
