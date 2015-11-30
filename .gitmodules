@@ -1,0 +1,3 @@
+[submodule "src/extern/Catch"]
+	path = src/extern/Catch
+	url = https://github.com/philsquared/Catch.git

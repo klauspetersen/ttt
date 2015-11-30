@@ -10,20 +10,23 @@ pkg_check_modules(LIBUSB REQUIRED libusb-1.0>=1.0)
 
 include_directories(${GLIB2_INCLUDE_DIRS})
 include_directories(/usr/include/libusb-1.0)
-include_directories(src/extern/include)
-include_directories(src/extern)
+include_directories(src/extern/sigrok/include)
+include_directories(src/extern/sigrok)
 include_directories(src/extern/trace)
+include_directories(src/extern/Catch/include)
 
 
 set(CMAKE_C_COMPILER             "/usr/bin/clang")
 set(CMAKE_C_FLAGS                "-Wall -std=c99")
 set(CMAKE_C_FLAGS_DEBUG          "-g")
 set(CMAKE_C_FLAGS_RELEASE        "-O4 -DNDEBUG")
+set(CMAKE_C_FLAGS_TEST           "-g")
 
 set(CMAKE_CXX_COMPILER             "/usr/bin/clang++")
 set(CMAKE_CXX_FLAGS                "-Wall -std=c++11 -msse4")
 set(CMAKE_CXX_FLAGS_DEBUG          "-g")
 set(CMAKE_CXX_FLAGS_RELEASE        "-O4 -DNDEBUG")
+set(CMAKE_CXX_FLAGS_TEST           "-g")
 
 set(CMAKE_AR      "/usr/bin/llvm-ar")
 set(CMAKE_LINKER  "/usr/bin/llvm-ld")
@@ -31,15 +34,19 @@ set(CMAKE_NM      "/usr/bin/llvm-nm")
 set(CMAKE_OBJDUMP "/usr/bin/llvm-objdump")
 set(CMAKE_RANLIB  "/usr/bin/llvm-ranlib")
 
+file(GLOB TEST_SOURCES
+        "src/tests/*.h"
+        "src/tests/*.cpp"
+        )
 
 file(GLOB EXTERN_SOURCES
-        "src/extern/*.h"
-        "src/extern/*.c"
+        "src/extern/sigrok/*.h"
+        "src/extern/sigrok/*.c"
         )
 
 file(GLOB EXTERN_HARDWARE_SOURCES
-        "src/extern/hardware/saleae-logic16/*.h"
-        "src/extern/hardware/saleae-logic16/*.c"
+        "src/extern/sigrok/hardware/saleae-logic16/*.h"
+        "src/extern/sigrok/hardware/saleae-logic16/*.c"
         )
 
 set(SOURCE_FILES src/main.cpp)
@@ -65,3 +72,11 @@ target_link_libraries (ttt ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries (ttt ${LIBUSB_LIBRARIES})
 set_property(TARGET ttt PROPERTY CXX_STANDARD 11)
 set_property(TARGET ttt PROPERTY C_STANDARD 99)
+
+add_executable(tst ${TEST_SOURCES} )
+set_target_properties(tst PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
+target_link_libraries (tst ${GLIB2_LIBRARIES})
+target_link_libraries (tst ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries (tst ${LIBUSB_LIBRARIES})
+set_property(TARGET tst PROPERTY CXX_STANDARD 11)
+set_property(TARGET tst PROPERTY C_STANDARD 99)
