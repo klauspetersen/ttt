@@ -33,11 +33,10 @@ char *byte2bin(uint8_t value, char *buf){
     return buf;
 }
 
-__m128i sse_trans_slice(__m128i x)
-{
-    union { unsigned short s[8]; __m128i m; } u;
+__m128i sse_data_transpose(__m128i x){
+    union { uint16_t s[8]; __m128i m; } u;
     for (int i = 0; i < 8; ++i) {
-        u.s[7-i]=_mm_movemask_epi8(x);
+        u.s[7-i]=(uint16_t)(_mm_movemask_epi8(x));
         x = _mm_slli_epi64(x,1);
     }
     return  u.m;
@@ -51,7 +50,7 @@ static void consumer_recv(){
     }
 }
 static void sr_data_recv_cb(sr_packet_t *packet){
-    char buf[9];
+    //char buf[9];
 
     for(int i=0; i< packet->size; i++){
         //printf("%s\n", byte2bin(((uint8_t*)packet->data)[i], buf));
@@ -61,78 +60,38 @@ static void sr_data_recv_cb(sr_packet_t *packet){
     }
 }
 
-uint8_t arrVal[] = {
-        0x00,
-        0x01,
-        0x02,
-        0x03,
-        0x04,
-        0x05,
-        0x06,
-        0x07,
-        0x08,
-        0x09,
-        0x0A,
-        0x0B,
-        0x0C,
-        0x0D,
-        0x0E,
-        0x0F
-};
 
+static void data_convert_copy(uint8_t *src, uint8_t *dst, uint32_t length){
+    //static const __m128i m1 = _mm_set_epi8(0x0,0x2,0x4,0x6,0x8,0xA,0xC,0xE,0x1,0x3,0x5,0x7,0x9,0xB,0xD,0xF);
+    static const __m128i m2 = _mm_set_epi8(0xF,0xD,0xB,0x9,0x7,0x5,0x3,0x1,0xE,0xC,0xA,0x8,0x6,0x4,0x2,0x0);
+    __m128i x, y;
+    assert(length%16==0);
+    assert(src != NULL);
+    assert(dst != NULL);
 
-uint8_t arrMask[] = {
-        0x01,
-        0x01,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80,
-        0x80
-};
-#if 0
-static void data_convert(uint8_t *src, uint8_t *dst, uint32_t length){
-    assert(length%128==0);
-
-    __m128i x = _mm_loadu_si128((__m128i *)src);
-
-    __m128i y = sse_trans_slice(x);
-
-
+    while(length > 0) {
+        /* Load unaligned */
+        x = _mm_loadu_si128((__m128i *) src);
+        /* Transpose */
+        y = sse_data_transpose(x);
+        /* Deinterlive */
+        y = _mm_shuffle_epi8(y, m2);
+        /* Store in dst */
+        _mm_storeu_si128((__m128i *) dst, y);
+        /* Inc by 128 bit */
+        dst += 16;
+        src += 16;
+        length -= 16;
+    }
 }
-#endif
-
-typedef union{
-    __m128i x;
-    uint8_t y[16];
-} _mmi_mask;
 
 int main()
 {
-    struct sr_dev_inst *sdi;
     struct sr_dev_driver *driver;
     struct sr_session *session;
     GMainLoop *main_loop;
 
-    __m128i x = _mm_loadu_si128((__m128i *)arrVal);
-
-    __m128i maskv = _mm_load_si128((__m128i *)arrMask);
-
-    x = _mm_shuffle_epi8(x, maskv);
-
-    __m128i y = sse_trans_slice(x);
-
-
-    //std::thread consumer_thread(consumer_recv);
+    thread t1(consumer_recv);
 
     cout << "trace_fast!" << endl;
     

@@ -1,7 +1,7 @@
+set(CMAKE_VERBOSE_MAKEFILE ON)
 cmake_minimum_required(VERSION 3.3)
 project(ttt)
 
-set(CMAKE_VERBOSE_MAKEFILE ON)
 find_package(Threads)
 find_package(PkgConfig)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.36.0)
@@ -15,7 +15,22 @@ include_directories(src/extern)
 include_directories(src/extern/trace)
 
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++11 -msse4")
+set(CMAKE_C_COMPILER             "/usr/bin/clang")
+set(CMAKE_C_FLAGS                "-Wall -std=c99")
+set(CMAKE_C_FLAGS_DEBUG          "-g")
+set(CMAKE_C_FLAGS_RELEASE        "-O4 -DNDEBUG")
+
+set(CMAKE_CXX_COMPILER             "/usr/bin/clang++")
+set(CMAKE_CXX_FLAGS                "-Wall -std=c++11 -msse4")
+set(CMAKE_CXX_FLAGS_DEBUG          "-g")
+set(CMAKE_CXX_FLAGS_RELEASE        "-O4 -DNDEBUG")
+
+set(CMAKE_AR      "/usr/bin/llvm-ar")
+set(CMAKE_LINKER  "/usr/bin/llvm-ld")
+set(CMAKE_NM      "/usr/bin/llvm-nm")
+set(CMAKE_OBJDUMP "/usr/bin/llvm-objdump")
+set(CMAKE_RANLIB  "/usr/bin/llvm-ranlib")
+
 
 file(GLOB EXTERN_SOURCES
         "src/extern/*.h"
