@@ -788,20 +788,15 @@ extern volatile int throughput;
 
 SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transfer){
 	int ret;
-	sr_packet_t packet;
+	sr_wrap_packet_t packet;
 	const struct sr_dev_inst *sdi = transfer->user_data;
-    struct dev_context *devc = sdi->priv;
-    size_t new_samples, num_samples;
 
 
     if(transfer->status == LIBUSB_TRANSFER_TIMED_OUT){
         sr_err("Timed out");
     }
 
-    new_samples = convert_sample_data(devc, devc->convbuffer, devc->convbuffer_size, transfer->buffer, transfer->actual_length);
-
-    packet.data = (void *)devc->convbuffer;
-    //packet.data = (void *)transfer->buffer;
+    packet.data = (void *)transfer->buffer;
     packet.size = transfer->length;
     packet.id = sdi->id;
 
@@ -810,6 +805,8 @@ SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transf
 			sdi->cb(&packet);
 		}
 	}
+
+	/* Get new transfer buffer */
 
 	if((ret =libusb_submit_transfer(transfer)) != LIBUSB_SUCCESS){
 		sr_err("%s: %s", __func__, libusb_error_name(ret));

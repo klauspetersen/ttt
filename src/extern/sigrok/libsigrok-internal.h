@@ -33,6 +33,8 @@
 #include "libsigrok.h"
 #endif
 
+#include "sigrok_wrapper.h"
+
 
 struct zip;
 struct zip_stat;
@@ -120,14 +122,6 @@ SR_PRIV int sr_log(int loglevel, const char *format, ...) G_GNUC_PRINTF(2, 3);
 
 SR_PRIV struct sr_channel *sr_channel_new(struct sr_dev_inst *sdi,
 		int index, int type, gboolean enabled, const char *name);
-
-typedef struct {
-    int id;
-    void *data;
-    ssize_t size;
-} sr_packet_t;
-
-typedef void (*sr_callback_t)(sr_packet_t *packet);
 
 /** Device instance data */
 struct sr_dev_inst {

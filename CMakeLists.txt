@@ -11,6 +11,7 @@ pkg_check_modules(LIBUSB REQUIRED libusb-1.0>=1.0)
 include_directories(${GLIB2_INCLUDE_DIRS})
 include_directories(/usr/include/libusb-1.0)
 include_directories(src/extern/sigrok/include)
+include_directories(src)
 include_directories(src/extern/sigrok)
 include_directories(src/extern/trace)
 include_directories(src/extern/Catch/include)
@@ -49,7 +50,7 @@ file(GLOB EXTERN_HARDWARE_SOURCES
         "src/extern/sigrok/hardware/saleae-logic16/*.c"
         )
 
-set(SOURCE_FILES src/main.cpp)
+set(SOURCE_FILES src/main.cpp src/sigrok_wrapper.c src/TransferObjectPool.cpp src/TransferObjectPool.h)
 
 set(SOURCE_EXTERN_TRACE_SOURCES
         "src/extern/trace/raw_sampler.cpp"
@@ -73,7 +74,7 @@ target_link_libraries (ttt ${LIBUSB_LIBRARIES})
 set_property(TARGET ttt PROPERTY CXX_STANDARD 11)
 set_property(TARGET ttt PROPERTY C_STANDARD 99)
 
-add_executable(tst ${TEST_SOURCES} )
+add_executable(tst ${TEST_SOURCES} src/TransferObjectPool.cpp src/TransferObjectPool.h)
 set_target_properties(tst PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/build)
 target_link_libraries (tst ${GLIB2_LIBRARIES})
 target_link_libraries (tst ${CMAKE_THREAD_LIBS_INIT})
