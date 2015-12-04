@@ -157,9 +157,6 @@ struct sr_dev_inst {
 	struct sr_session *session;
 };
 
-/* Generic device instances */
-SR_PRIV void sr_dev_inst_free(struct sr_dev_inst *sdi);
-
 #ifdef HAVE_LIBUSB_1_0
 /* USB-specific instances */
 SR_PRIV struct sr_usb_dev_inst *sr_usb_dev_inst_new(uint8_t bus,
@@ -168,16 +165,10 @@ SR_PRIV void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb);
 #endif
 
 #ifdef HAVE_LIBUSB_1_0
-SR_PRIV GSList *sr_usb_find(libusb_context *usb_ctx, const char *conn);
 SR_PRIV int usb_source_add(struct sr_session *session, struct sr_context *ctx, int timeout, sr_receive_data_callback cb, void *cb_data);
 SR_PRIV int usb_get_port_path(libusb_device *dev, char *path, int path_len);
 #endif
 
-
-/*--- hwdriver.c ------------------------------------------------------------*/
-
-SR_PRIV const GVariantType *sr_variant_type_get(int datatype);
-SR_PRIV int sr_variant_type_check(uint32_t key, GVariant *data);
 
 
 /*--- session.c -------------------------------------------------------------*/
@@ -188,12 +179,6 @@ struct sr_session {
 	/** List of struct sr_dev_inst pointers. */
 	GSList *devs;
 
-
-	/** Callback to invoke on session stop. */
-	sr_session_stopped_callback stopped_callback;
-	/** User data to be passed to the session stop callback. */
-	void *stopped_cb_data;
-
 	/** Mutex protecting the main context pointer. */
 	GMutex main_mutex;
 	/** Context of the session main loop. */
@@ -202,22 +187,14 @@ struct sr_session {
 	/** Registered event sources for this session. */
 	GHashTable *event_sources;
 	/** Session main loop. */
-	GMainLoop *main_loop;
-	/** ID of idle source for dispatching the session stop notification. */
-	unsigned int stop_check_id;
-	/** Whether the session has been started. */
-	gboolean running;
+
 };
 
 SR_PRIV int sr_session_source_add_internal(struct sr_session *session, void *key, GSource *source);
-SR_PRIV int sr_session_source_destroyed(struct sr_session *session,	void *key, GSource *source);
 
 /*--- session_file.c --------------------------------------------------------*/
 
-typedef void (*std_dev_clear_callback)(void *priv);
-
 SR_PRIV int std_init(struct sr_context *sr_ctx, struct sr_dev_driver *di, const char *prefix);
-SR_PRIV int std_dev_clear(const struct sr_dev_driver *driver,std_dev_clear_callback clear_private);
 
 /*--- resource.c ------------------------------------------------------------*/
 
@@ -234,10 +211,6 @@ SR_PRIV ssize_t sr_resource_read(struct sr_context *ctx,
 SR_PRIV void *sr_resource_load(struct sr_context *ctx, int type,
 		const char *name, size_t *size, size_t max_size)
 		G_GNUC_MALLOC G_GNUC_WARN_UNUSED_RESULT;
-
-
-
-
 
 /*--- hardware/ezusb.c ------------------------------------------------------*/
 

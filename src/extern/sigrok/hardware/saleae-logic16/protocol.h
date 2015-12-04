@@ -60,9 +60,6 @@ struct dev_context {
 	/** The input voltage selected by the user. */
 	enum voltage_range selected_voltage_range;
 
-	/** Channels to use. */
-	uint16_t cur_channels;
-
 	/* EEPROM data from address 8. */
 	uint8_t eeprom_data[8];
 
@@ -72,8 +69,6 @@ struct dev_context {
 	uint16_t channel_masks[16];
 	uint16_t channel_data[16];
 	int cur_channel;
-	uint8_t *convbuffer;
-	size_t convbuffer_size;
 
 
 	unsigned int num_transfers;
@@ -86,9 +81,8 @@ struct dev_context {
 };
 
 SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi,
-			uint64_t samplerate, uint16_t channels);
+			uint64_t samplerate);
 SR_PRIV int logic16_start_acquisition(const struct sr_dev_inst *sdi);
-SR_PRIV int logic16_abort_acquisition(const struct sr_dev_inst *sdi);
 SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi);
 SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transfer);
 

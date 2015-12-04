@@ -28,9 +28,7 @@ void sigrok_init(){
         g_critical("Failed to initialize session.");
     }
 
-    if (sr_driver_init(sr_ctx, driver) != SR_OK) {
-        g_critical("Failed to initialize driver.");
-    }
+    driver->init(driver, sr_ctx);
 
     GSList *devices = sr_driver_scan(driver, NULL);
 

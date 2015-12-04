@@ -551,7 +551,7 @@ static int abort_acquisition_sync(const struct sr_dev_inst *sdi){
 	return SR_OK;
 }
 
-SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t samplerate, uint16_t channels){
+SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t samplerate){
 	uint8_t clock_select, sta_con_reg, mode_reg;
 	uint64_t div;
 	int i, ret, nchan = 0;
@@ -572,20 +572,6 @@ SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t sa
 		clock_select = 1;
 	} else {
 		sr_err("Unable to sample at %" PRIu64 "Hz.", samplerate);
-		return SR_ERR;
-	}
-
-	for (i = 0; i < 16; i++)
-		if (channels & (1U << i))
-			nchan++;
-
-	if ((nchan >= 13 && samplerate > MAX_13CH_SAMPLE_RATE) ||
-	    (nchan >= 10 && samplerate > MAX_10CH_SAMPLE_RATE) ||
-	    (nchan >= 8  && samplerate > MAX_8CH_SAMPLE_RATE) ||
-	    (nchan >= 7  && samplerate > MAX_7CH_SAMPLE_RATE) ||
-	    (nchan >= 4  && samplerate > MAX_4CH_SAMPLE_RATE)) {
-		sr_err("Unable to sample at %" PRIu64 "Hz "
-		       "with this many channels.", samplerate);
 		return SR_ERR;
 	}
 
@@ -613,10 +599,10 @@ SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t sa
 	if ((ret = write_fpga_register(sdi, FPGA_REG(SAMPLE_RATE_DIVISOR), (uint8_t)(div - 1))) != SR_OK)
 		return ret;
 
-	if ((ret = write_fpga_register(sdi, FPGA_REG(CHANNEL_SELECT_LOW), (uint8_t)(channels & 0xff))) != SR_OK)
+	if ((ret = write_fpga_register(sdi, FPGA_REG(CHANNEL_SELECT_LOW), (uint8_t)(0xff))) != SR_OK)
 		return ret;
 
-	if ((ret = write_fpga_register(sdi, FPGA_REG(CHANNEL_SELECT_HIGH), (uint8_t)(channels >> 8))) != SR_OK)
+	if ((ret = write_fpga_register(sdi, FPGA_REG(CHANNEL_SELECT_HIGH), (uint8_t)(0x00))) != SR_OK)
 		return ret;
 
 	if ((ret = write_fpga_register(sdi, FPGA_REG(STATUS_CONTROL), FPGA_STATUS_CONTROL(UNKNOWN2) | FPGA_STATUS_CONTROL(UPDATE))) != SR_OK)
@@ -651,7 +637,7 @@ SR_PRIV int logic16_start_acquisition(const struct sr_dev_inst *sdi){
     int ret;
     struct dev_context *devc;
 
-sr_info("logic16_start_acquisition");
+	sr_info("logic16_start_acquisition");
 
     devc = sdi->priv;
 
@@ -661,49 +647,7 @@ sr_info("logic16_start_acquisition");
     return write_fpga_register(sdi, FPGA_REG(STATUS_CONTROL), FPGA_STATUS_CONTROL(UNKNOWN2) | FPGA_STATUS_CONTROL(RUNNING));
 }
 
-SR_PRIV int logic16_abort_acquisition(const struct sr_dev_inst *sdi){
-	static const uint8_t command[1] = {
-		COMMAND_ABORT_ACQUISITION_ASYNC,
-	};
-	int ret;
-	uint8_t sta_con_reg;
-	struct dev_context *devc;
 
-    sr_info("logic16_abort_acquisition");
-
-	devc = sdi->priv;
-
-	if ((ret = do_ep1_command(sdi, command, 1, NULL, 0)) != SR_OK)
-		return ret;
-
-	if ((ret = write_fpga_register(sdi, FPGA_REG(STATUS_CONTROL), 0x00)) != SR_OK)
-		return ret;
-
-	if ((ret = read_fpga_register(sdi, FPGA_REG(STATUS_CONTROL), &sta_con_reg)) != SR_OK)
-		return ret;
-
-	if (devc->fpga_variant != FPGA_VARIANT_MCUPRO && (sta_con_reg & ~FPGA_STATUS_CONTROL(OVERFLOW)) != FPGA_STATUS_CONTROL(UNKNOWN1)) {
-		sr_dbg("Invalid state at acquisition stop: 0x%02x != 0x%02x.", sta_con_reg & ~0x20, FPGA_STATUS_CONTROL(UNKNOWN1));
-		return SR_ERR;
-	}
-
-	if (devc->fpga_variant == FPGA_VARIANT_ORIGINAL) {
-		uint8_t reg8, reg9;
-
-		if ((ret = read_fpga_register(sdi, 8, &reg8)) != SR_OK)
-			return ret;
-
-		if ((ret = read_fpga_register(sdi, 9, &reg9)) != SR_OK)
-			return ret;
-	}
-
-	if (devc->fpga_variant != FPGA_VARIANT_MCUPRO && sta_con_reg & FPGA_STATUS_CONTROL(OVERFLOW)) {
-		sr_warn("FIFO overflow, capture data may be truncated.");
-		return SR_ERR;
-	}
-
-	return SR_OK;
-}
 
 SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi){
 	uint8_t version;

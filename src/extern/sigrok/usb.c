@@ -153,25 +153,6 @@ static gboolean usb_source_dispatch(GSource *source,
 	return keep;
 }
 
-/** USB event source finalize() method.
- */
-static void usb_source_finalize(GSource *source)
-{
-	struct usb_source *usource;
-
-	usource = (struct usb_source *)source;
-
-	sr_spew("%s", __func__);
-
-	libusb_set_pollfd_notifiers(usource->usb_ctx, NULL, NULL, NULL);
-
-	g_ptr_array_unref(usource->pollfds);
-	usource->pollfds = NULL;
-
-	sr_session_source_destroyed(usource->session,
-			usource->usb_ctx, source);
-}
-
 /** Callback invoked when a new libusb FD should be added to the poll set.
  */
 static LIBUSB_CALL void usb_pollfd_added(libusb_os_handle fd,
@@ -221,8 +202,7 @@ static LIBUSB_CALL void usb_pollfd_removed(libusb_os_handle fd, void *user_data)
 			return;
 		}
 	}
-	sr_err("FD to be removed (%" G_GINTPTR_FORMAT
-		") not found in event source poll set.", (gintptr)fd);
+	sr_err("FD to be removed (%" G_GINTPTR_FORMAT ") not found in event source poll set.", (gintptr)fd);
 }
 
 /** Destroy notify callback for FDs maintained by the USB event source.
@@ -258,7 +238,7 @@ static GSource *usb_source_new(struct sr_session *session,
 		.prepare  = &usb_source_prepare,
 		.check    = &usb_source_check,
 		.dispatch = &usb_source_dispatch,
-		.finalize = &usb_source_finalize
+		.finalize = NULL
 	};
 	GSource *source;
 	struct usb_source *usource;
@@ -293,110 +273,9 @@ static GSource *usb_source_new(struct sr_session *session,
 #else
 	free(upollfds);
 #endif
-	libusb_set_pollfd_notifiers(usb_ctx,
-		&usb_pollfd_added, &usb_pollfd_removed, usource);
+	libusb_set_pollfd_notifiers(usb_ctx, &usb_pollfd_added, &usb_pollfd_removed, usource);
 
 	return source;
-}
-
-/**
- * Find USB devices according to a connection string.
- *
- * @param usb_ctx libusb context to use while scanning.
- * @param conn Connection string specifying the device(s) to match. This
- * can be of the form "<bus>.<address>", or "<vendorid>.<productid>".
- *
- * @return A GSList of struct sr_usb_dev_inst, with bus and address fields
- * matching the device that matched the connection string. The GSList and
- * its contents must be freed by the caller.
- */
-SR_PRIV GSList *sr_usb_find(libusb_context *usb_ctx, const char *conn)
-{
-	struct sr_usb_dev_inst *usb;
-	struct libusb_device **devlist;
-	struct libusb_device_descriptor des;
-	GSList *devices;
-	GRegex *reg;
-	GMatchInfo *match;
-	int vid, pid, bus, addr, b, a, ret, i;
-	char *mstr;
-
-	vid = pid = bus = addr = 0;
-	reg = g_regex_new(CONN_USB_VIDPID, 0, 0, NULL);
-	if (g_regex_match(reg, conn, 0, &match)) {
-		if ((mstr = g_match_info_fetch(match, 1)))
-			vid = strtoul(mstr, NULL, 16);
-		g_free(mstr);
-
-		if ((mstr = g_match_info_fetch(match, 2)))
-			pid = strtoul(mstr, NULL, 16);
-		g_free(mstr);
-		sr_dbg("Trying to find USB device with VID:PID = %04x:%04x.",
-		       vid, pid);
-	} else {
-		g_match_info_unref(match);
-		g_regex_unref(reg);
-		reg = g_regex_new(CONN_USB_BUSADDR, 0, 0, NULL);
-		if (g_regex_match(reg, conn, 0, &match)) {
-			if ((mstr = g_match_info_fetch(match, 1)))
-				bus = strtoul(mstr, NULL, 10);
-			g_free(mstr);
-
-			if ((mstr = g_match_info_fetch(match, 2)))
-				addr = strtoul(mstr, NULL, 10);
-			g_free(mstr);
-			sr_dbg("Trying to find USB device with bus.address = "
-			       "%d.%d.", bus, addr);
-		}
-	}
-	g_match_info_unref(match);
-	g_regex_unref(reg);
-
-	if (vid + pid + bus + addr == 0) {
-		sr_err("Neither VID:PID nor bus.address was specified.");
-		return NULL;
-	}
-
-	if (bus > 64) {
-		sr_err("Invalid bus specified: %d.", bus);
-		return NULL;
-	}
-
-	if (addr > 127) {
-		sr_err("Invalid address specified: %d.", addr);
-		return NULL;
-	}
-
-	/* Looks like a valid USB device specification, but is it connected? */
-	devices = NULL;
-	libusb_get_device_list(usb_ctx, &devlist);
-	for (i = 0; devlist[i]; i++) {
-		if ((ret = libusb_get_device_descriptor(devlist[i], &des))) {
-			sr_err("Failed to get device descriptor: %s.",
-			       libusb_error_name(ret));
-			continue;
-		}
-
-		if (vid + pid && (des.idVendor != vid || des.idProduct != pid))
-			continue;
-
-		b = libusb_get_bus_number(devlist[i]);
-		a = libusb_get_device_address(devlist[i]);
-		if (bus + addr && (b != bus || a != addr))
-			continue;
-
-		sr_dbg("Found USB device (VID:PID = %04x:%04x, bus.address = "
-		       "%d.%d).", des.idVendor, des.idProduct, b, a);
-
-		usb = sr_usb_dev_inst_new(libusb_get_bus_number(devlist[i]),
-				libusb_get_device_address(devlist[i]), NULL);
-		devices = g_slist_append(devices, usb);
-	}
-	libusb_free_device_list(devlist, 1);
-
-	sr_dbg("Found %d device(s).", g_slist_length(devices));
-	
-	return devices;
 }
 
 

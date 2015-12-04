@@ -34,18 +34,6 @@
  * Creating, using, or destroying libsigrok sessions.
  */
 
-/**
- * @defgroup grp_session Session handling
- *
- * Creating, using, or destroying libsigrok sessions.
- *
- * @{
- */
-
-struct datafeed_callback {
-	sr_datafeed_callback cb;
-	void *cb_data;
-};
 
 /**
  * Create a new session.
@@ -80,40 +68,6 @@ SR_API int sr_session_new(struct sr_context *ctx,
 	session->event_sources = g_hash_table_new(NULL, NULL);
 
 	*new_session = session;
-
-	return SR_OK;
-}
-
-/**
- * Remove all the devices from a session.
- *
- * The session itself (i.e., the struct sr_session) is not free'd and still
- * exists after this function returns.
- *
- * @param session The session to use. Must not be NULL.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_BUG Invalid session passed.
- *
- * @since 0.4.0
- */
-SR_API int sr_session_dev_remove_all(struct sr_session *session)
-{
-	struct sr_dev_inst *sdi;
-	GSList *l;
-
-	if (!session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-
-	for (l = session->devs; l; l = l->next) {
-		sdi = (struct sr_dev_inst *) l->data;
-		sdi->session = NULL;
-	}
-
-	g_slist_free(session->devs);
-	session->devs = NULL;
 
 	return SR_OK;
 }
@@ -215,35 +169,6 @@ static int set_main_context(struct sr_session *session)
 	return SR_OK;
 }
 
-/** Unset the main context used for the current session run.
- *
- * Must be called right after stopping the session. Note that if the
- * session is stopped asynchronously, the main loop may still be running
- * after the main context has been unset. This is OK as long as no new
- * event sources are created -- the main loop holds its own reference
- * to the main context.
- */
-static int unset_main_context(struct sr_session *session)
-{
-	int ret;
-
-	g_mutex_lock(&session->main_mutex);
-
-	if (session->main_context) {
-		g_main_context_unref(session->main_context);
-		session->main_context = NULL;
-		ret = SR_OK;
-	} else {
-		/* May happen if the set/unset calls are not matched.
-		 */
-		sr_err("No main context to unset.");
-		ret = SR_ERR;
-	}
-	g_mutex_unlock(&session->main_mutex);
-
-	return ret;
-}
-
 static unsigned int session_source_attach(struct sr_session *session,
 		GSource *source)
 {
@@ -259,64 +184,6 @@ static unsigned int session_source_attach(struct sr_session *session,
 	g_mutex_unlock(&session->main_mutex);
 
 	return id;
-}
-
-/* Idle handler; invoked when the number of registered event sources
- * for a running session drops to zero.
- */
-static gboolean delayed_stop_check(void *data)
-{
-	struct sr_session *session;
-
-	session = data;
-	session->stop_check_id = 0;
-
-	/* Session already ended? */
-	if (!session->running)
-		return G_SOURCE_REMOVE;
-
-	/* New event sources may have been installed in the meantime. */
-	if (g_hash_table_size(session->event_sources) != 0)
-		return G_SOURCE_REMOVE;
-
-	session->running = FALSE;
-	unset_main_context(session);
-
-	sr_info("Stopped.");
-
-	/* This indicates a bug in user code, since it is not valid to
-	 * restart or destroy a session while it may still be running.
-	 */
-	if (!session->main_loop && !session->stopped_callback) {
-		sr_err("BUG: Session stop left unhandled.");
-		return G_SOURCE_REMOVE;
-	}
-	if (session->main_loop)
-		g_main_loop_quit(session->main_loop);
-
-	if (session->stopped_callback)
-		(*session->stopped_callback)(session->stopped_cb_data);
-
-	return G_SOURCE_REMOVE;
-}
-
-static int stop_check_later(struct sr_session *session)
-{
-	GSource *source;
-	unsigned int source_id;
-
-	if (session->stop_check_id != 0)
-		return SR_OK; /* idle handler already installed */
-
-	source = g_idle_source_new();
-	g_source_set_callback(source, &delayed_stop_check, session, NULL);
-
-	source_id = session_source_attach(session, source);
-	session->stop_check_id = source_id;
-
-	g_source_unref(source);
-
-	return (source_id != 0) ? SR_OK : SR_ERR;
 }
 
 /**
@@ -343,57 +210,13 @@ static int stop_check_later(struct sr_session *session)
 SR_API int sr_session_start(struct sr_session *session)
 {
 	struct sr_dev_inst *sdi;
-	struct sr_channel *ch;
-	GSList *l, *c;
+	struct sr_channel;
+	GSList *l;
 	int ret;
 
-	if (!session) {
-		sr_err("%s: session was NULL", __func__);
-		return SR_ERR_ARG;
-	}
-
-	if (!session->devs) {
-		sr_err("%s: session->devs was NULL; a session "
-		       "cannot be started without devices.", __func__);
-		return SR_ERR_ARG;
-	}
-
-	if (session->running) {
-		sr_err("Cannot (re-)start session while it is still running.");
-		return SR_ERR;
-	}
-
-
-	/* Check enabled channels and commit settings of all devices. */
-	for (l = session->devs; l; l = l->next) {
-		sdi = l->data;
-		for (c = sdi->channels; c; c = c->next) {
-			ch = c->data;
-			if (ch->enabled)
-				break;
-		}
-		if (!c) {
-			sr_err("%s device %s has no enabled channels.",
-				sdi->driver->name, sdi->connection_id);
-			return SR_ERR;
-		}
-
-		ret = sr_config_commit(sdi);
-		if (ret != SR_OK) {
-			sr_err("Failed to commit %s device %s settings "
-				"before starting acquisition.",
-				sdi->driver->name, sdi->connection_id);
-			return ret;
-		}
-	}
-
-	ret = set_main_context(session);
-	if (ret != SR_OK)
-		return ret;
+	set_main_context(session);
 
 	sr_info("Starting.");
-
-	session->running = TRUE;
 
 	/* Have all devices start acquisition. */
 	for (l = session->devs; l; l = l->next) {
@@ -456,51 +279,6 @@ SR_PRIV int sr_session_source_add_internal(struct sr_session *session,
 		return SR_ERR;
 
 	return SR_OK;
-}
-
-/** Unregister an event source that has been destroyed.
- *
- * This is intended to be called from a source's finalize() method.
- *
- * @param session The session to use. Must not be NULL.
- * @param key The key used to identify @a source.
- * @param source The source object that was destroyed.
- *
- * @retval SR_OK Success.
- * @retval SR_ERR_BUG Event source for @a key does not match @a source.
- * @retval SR_ERR Other error.
- *
- * @private
- */
-SR_PRIV int sr_session_source_destroyed(struct sr_session *session,
-		void *key, GSource *source)
-{
-	GSource *registered_source;
-
-	registered_source = g_hash_table_lookup(session->event_sources, key);
-	/*
-	 * Trying to remove an already removed event source is problematic
-	 * since the poll_object handle may have been reused in the meantime.
-	 */
-	if (!registered_source) {
-		sr_err("No event source for key %p found.", key);
-		return SR_ERR_BUG;
-	}
-	if (registered_source != source) {
-		sr_err("Event source for key %p does not match"
-			" destroyed source.", key);
-		return SR_ERR_BUG;
-	}
-	g_hash_table_remove(session->event_sources, key);
-
-	if (g_hash_table_size(session->event_sources) > 0)
-		return SR_OK;
-
-	/* If no event sources are left, consider the acquisition finished.
-	 * This is pretty crude, as it requires all event sources to be
-	 * registered via the libsigrok API.
-	 */
-	return stop_check_later(session);
 }
 
 
