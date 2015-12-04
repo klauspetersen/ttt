@@ -90,26 +90,6 @@ static gboolean usb_source_prepare(GSource *source, int *timeout)
 	return (remaining_ms == 0);
 }
 
-/** USB event source check() method.
- */
-static gboolean usb_source_check(GSource *source)
-{
-	struct usb_source *usource;
-	GPollFD *pollfd;
-	unsigned int revents;
-	unsigned int i;
-
-	usource = (struct usb_source *)source;
-	revents = 0;
-
-	for (i = 0; i < usource->pollfds->len; i++) {
-		pollfd = g_ptr_array_index(usource->pollfds, i);
-		revents |= pollfd->revents;
-	}
-	return (revents != 0 || (usource->due_us != INT64_MAX
-			&& usource->due_us <= g_source_get_time(source)));
-}
-
 /** USB event source dispatch() method.
  */
 static gboolean usb_source_dispatch(GSource *source,
@@ -236,7 +216,7 @@ static GSource *usb_source_new(struct sr_session *session,
 {
 	static GSourceFuncs usb_source_funcs = {
 		.prepare  = &usb_source_prepare,
-		.check    = &usb_source_check,
+		.check    = NULL,
 		.dispatch = &usb_source_dispatch,
 		.finalize = NULL
 	};
@@ -277,8 +257,6 @@ static GSource *usb_source_new(struct sr_session *session,
 
 	return source;
 }
-
-
 
 SR_PRIV int usb_source_add(struct sr_session *session, struct sr_context *ctx,
 		int timeout, sr_receive_data_callback cb, void *cb_data)
