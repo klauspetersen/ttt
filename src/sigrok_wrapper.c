@@ -58,7 +58,6 @@ void sigrok_init(){
     g_main_loop_run(main_loop);
 }
 
-
 static void sr_data_recv_cb(sr_wrap_packet_t *packet){
     //char buf[9];
 

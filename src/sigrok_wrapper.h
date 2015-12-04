@@ -6,6 +6,7 @@
 #define TTT_SIGROK_WRAPPER_H
 
 #include <unistd.h>
+#include <libusb.h>
 
 #define SIGROK_WRAPPER_MAX_DEVICES 3
 
@@ -15,14 +16,13 @@ extern "C" {
 
 typedef struct {
     int id;
-    void *data;
+    uint8_t *data;
     ssize_t size;
+    void *ref;
 } sr_wrap_packet_t;
 
-typedef struct libusb_transfer{} sr_wrap_libusb_transfer_t;
-
 typedef struct {
-    sr_wrap_libusb_transfer_t transfer;
+    struct libusb_transfer *transfer;
     sr_wrap_packet_t packet;
 } sr_warp_transfer_t;
 
