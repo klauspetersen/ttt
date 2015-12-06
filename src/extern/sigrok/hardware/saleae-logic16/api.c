@@ -247,7 +247,7 @@ static int dev_open(struct sr_dev_inst *sdi) {
     return SR_OK;
 }
 
-static int receive_data(int fd, int revents, void *cb_data) {
+int receive_data(int fd, int revents, void *cb_data) {
     struct timeval tv;
     struct dev_context *devc;
     struct drv_context *drvc;
@@ -274,6 +274,7 @@ static int receive_data(int fd, int revents, void *cb_data) {
     return TRUE;
 }
 
+#if 0
 static int dev_acquisition_start(const struct sr_dev_inst *sdi, void *cb_data) {
     struct sr_dev_driver *di = sdi->driver;
     struct dev_context *devc;
@@ -325,7 +326,7 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi, void *cb_data) {
 
     return SR_OK;
 }
-
+#endif
 
 static int dev_acquisition_trigger(const struct sr_dev_inst *sdi) {
     return logic16_start_acquisition(sdi);
@@ -346,7 +347,8 @@ SR_PRIV struct sr_dev_driver saleae_logic16_driver_info = {
         .config_list = NULL,
         .dev_open = dev_open,
         .dev_close = NULL,
-        .dev_acquisition_start = dev_acquisition_start,
+        //.dev_acquisition_start = dev_acquisition_start,
+        .dev_acquisition_start = NULL,
         .dev_acquisition_trigger = dev_acquisition_trigger,
         .dev_acquisition_stop = NULL,
         .context = NULL,

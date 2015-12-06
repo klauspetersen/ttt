@@ -548,7 +548,7 @@ static int abort_acquisition_sync(const struct sr_dev_inst *sdi){
 	return SR_OK;
 }
 
-SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t samplerate){
+int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t samplerate){
 	uint8_t clock_select, sta_con_reg, mode_reg;
 	uint64_t div;
 	int ret;

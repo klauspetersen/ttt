@@ -74,10 +74,11 @@ struct dev_context {
 	const uint8_t *fpga_mode_bit_map;
 };
 
-SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi,
-			uint64_t samplerate);
-SR_PRIV int logic16_start_acquisition(const struct sr_dev_inst *sdi);
-SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi);
-SR_PRIV void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transfer);
+int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t samplerate);
+int logic16_start_acquisition(const struct sr_dev_inst *sdi);
+int logic16_init_device(const struct sr_dev_inst *sdi);
+void LIBUSB_CALL logic16_receive_transfer(struct libusb_transfer *transfer);
+
+int receive_data(int fd, int revents, void *cb_data);
 
 #endif
