@@ -464,8 +464,6 @@ static int upload_fpga_bitstream(const struct sr_dev_inst *sdi, enum voltage_ran
 	devc = sdi->priv;
 	drvc = sdi->driver->context;
 
-	if (devc->cur_voltage_range == vrange)
-		return SR_OK;
 
 	if (devc->fpga_variant != FPGA_VARIANT_MCUPRO) {
 		switch (vrange) {
@@ -526,7 +524,6 @@ static int upload_fpga_bitstream(const struct sr_dev_inst *sdi, enum voltage_ran
 	if ((ret = configure_led(sdi)) != SR_OK)
 		return ret;
 
-	devc->cur_voltage_range = vrange;
 	return SR_OK;
 }
 
@@ -554,15 +551,11 @@ static int abort_acquisition_sync(const struct sr_dev_inst *sdi){
 SR_PRIV int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t samplerate){
 	uint8_t clock_select, sta_con_reg, mode_reg;
 	uint64_t div;
-	int i, ret, nchan = 0;
+	int ret;
 	struct dev_context *devc;
 
 	devc = sdi->priv;
 
-	if (samplerate == 0 || samplerate > MAX_SAMPLE_RATE) {
-		sr_err("Unable to sample at %" PRIu64 "Hz.", samplerate);
-		return SR_ERR;
-	}
 
 	if (BASE_CLOCK_0_FREQ % samplerate == 0 &&
 	    (div = BASE_CLOCK_0_FREQ / samplerate) <= 256) {
@@ -658,8 +651,6 @@ SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi){
 
     sr_info("logic16_init_device");
 
-	devc->cur_voltage_range = VOLTAGE_RANGE_UNKNOWN;
-
 	if ((ret = abort_acquisition_sync(sdi)) != SR_OK)
 		return ret;
 
@@ -685,6 +676,7 @@ SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi){
 	return ret;
 }
 
+#if 0
 static size_t convert_sample_data(struct dev_context *devc, uint8_t *dest, size_t destcnt, const uint8_t *src, size_t srccnt){
     uint16_t *channel_data;
     int i, cur_channel;
@@ -724,7 +716,7 @@ static size_t convert_sample_data(struct dev_context *devc, uint8_t *dest, size_
 
     return ret;
 }
-
+#endif
 
 extern volatile int throughput;
 

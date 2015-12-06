@@ -51,12 +51,6 @@ struct dev_context {
 	/** The currently configured samplerate of the device. */
 	uint64_t cur_samplerate;
 
-	/** Percent of the samples that should be captured before the trigger. */
-	uint64_t capture_ratio;
-
-	/** The currently configured input voltage of the device. */
-	enum voltage_range cur_voltage_range;
-
 	/** The input voltage selected by the user. */
 	enum voltage_range selected_voltage_range;
 
