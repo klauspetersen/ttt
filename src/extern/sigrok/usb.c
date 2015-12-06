@@ -248,11 +248,8 @@ static GSource *usb_source_new(struct sr_session *session,
 	for (upfd = upollfds; *upfd != NULL; upfd++)
 		usb_pollfd_added((*upfd)->fd, (*upfd)->events, usource);
 
-#if (LIBUSB_API_VERSION >= 0x01000104)
-	libusb_free_pollfds(upollfds);
-#else
 	free(upollfds);
-#endif
+
 	libusb_set_pollfd_notifiers(usb_ctx, &usb_pollfd_added, &usb_pollfd_removed, usource);
 
 	return source;

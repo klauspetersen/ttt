@@ -47,31 +47,13 @@ SR_API int sr_init(struct sr_context **ctx){
 	int ret;
 	struct sr_context *context;
 
-	if (!ctx) {
-		sr_err("%s(): libsigrok context was NULL.", __func__);
-		return SR_ERR;
-	}
-
 	context = g_malloc0(sizeof(struct sr_context));
-
-#ifdef HAVE_LIBUSB_1_0
-	ret = libusb_init(&context->libusb_ctx);
-	if (LIBUSB_SUCCESS != ret) {
-		sr_err("libusb_init() returned %s.", libusb_error_name(ret));
-		ret = SR_ERR;
-		goto done;
-	}
-#endif
+	libusb_init(&context->libusb_ctx);
 	sr_resource_set_hooks(context, NULL, NULL, NULL, NULL);
-
 	*ctx = context;
-	context = NULL;
+
 	ret = SR_OK;
 
-#ifdef HAVE_LIBUSB_1_0
-done:
-#endif
-	g_free(context);
 	return ret;
 }
 

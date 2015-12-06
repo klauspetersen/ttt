@@ -18,13 +18,13 @@ include_directories(src/extern/Catch/include)
 
 
 set(CMAKE_C_COMPILER             "/usr/bin/clang-3.6")
-set(CMAKE_C_FLAGS                "-Wall -std=c99 -fno-omit-frame-pointer")
+set(CMAKE_C_FLAGS                "-Wall -v -std=c99 -fno-omit-frame-pointer")
 set(CMAKE_C_FLAGS_DEBUG          "-g")
 set(CMAKE_C_FLAGS_RELEASE        "-O4 -DNDEBUG")
 set(CMAKE_C_FLAGS_TEST           "-g")
 
 set(CMAKE_CXX_COMPILER             "/usr/bin/clang++-3.6")
-set(CMAKE_CXX_FLAGS                "-Wall --std=c++14ss -msse4 -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS                "-Wall -v --std=c++14ss -msse4 -fno-omit-frame-pointer")
 set(CMAKE_CXX_FLAGS_DEBUG          "-g")
 set(CMAKE_CXX_FLAGS_RELEASE        "-O4 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_TEST           "-g")

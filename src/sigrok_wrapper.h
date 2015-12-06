@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <libusb.h>
 
+
 #define SIGROK_WRAPPER_MAX_DEVICES 3
 
 #ifdef __cplusplus
@@ -29,7 +30,11 @@ typedef struct {
 
 typedef void (*sr_callback_t)(sr_wrap_packet_t *packet);
 
-void sigrok_init();
+#include "libsigrok-internal.h"
+
+void sigrok_init(struct sr_context **ctx);
+
+
 
 #ifdef __cplusplus
 }

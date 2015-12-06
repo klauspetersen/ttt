@@ -20,13 +20,27 @@ static void consumer_recv(){
     }
 }
 
+void loop(){
+    struct sr_context *ctx;
+    sigrok_init(&ctx);
+
+
+
+
+
+
+}
+
 int main()
 {
-    thread usb(sigrok_init);
+    thread t0(loop);
     thread t1(consumer_recv);
 
     for(;;);
 }
+
+
+
 
 #if 0
 char *byte2bin(uint8_t value, char *buf){
