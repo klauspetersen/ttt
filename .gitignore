@@ -1,4 +1,5 @@
 build/
+src/extern/trace
 
 # Scons
 .sconsign.dblite
