@@ -568,9 +568,6 @@ int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t samplerate
 		return SR_ERR;
 	}
 
-	ret = upload_fpga_bitstream(sdi, devc->selected_voltage_range);
-	if (ret != SR_OK)
-		return ret;
 
 	if ((ret = read_fpga_register(sdi, FPGA_REG(STATUS_CONTROL), &sta_con_reg)) != SR_OK)
 		return ret;

@@ -47,20 +47,18 @@ void sigrok_init(struct sr_context **ctx){
         sdiArr[i]->cb = sr_data_recv_cb;
         session->devs = g_slist_append(session->devs, sdiArr[i]);
         sdiArr[i]->session = session;
-        sdiArr[i]->driver->dev_open(sdiArr[i]);
+        sdiArr[i]->driver->dev_open(sdiArr[i]); /* Calls upload */
         i++;
     }
-
 
     session->main_context = g_main_context_ref_thread_default();
     g_main_context_acquire(session->main_context);
     g_main_context_release(session->main_context);
 
-
     /* Have all devices start acquisition. */
     for (l = session->devs; l; l = l->next) {
         sdi = l->data;
-        sigrok_start(sdi, sdi);
+        sigrok_start(sdi, sdi); /* Calls upload bitstream */
     }
 
     /* Have all devices fire. */
