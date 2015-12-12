@@ -185,6 +185,27 @@ static LIBUSB_CALL void usb_pollfd_removed(libusb_os_handle fd, void *user_data)
 	sr_err("FD to be removed (%" G_GINTPTR_FORMAT ") not found in event source poll set.", (gintptr)fd);
 }
 
+/** USB event source check() method.
+ */
+static gboolean usb_source_check(GSource *source)
+{
+    struct usb_source *usource;
+    GPollFD *pollfd;
+    unsigned int revents;
+    unsigned int i;
+
+    usource = (struct usb_source *)source;
+    revents = 0;
+
+    for (i = 0; i < usource->pollfds->len; i++) {
+        pollfd = g_ptr_array_index(usource->pollfds, i);
+        revents |= pollfd->revents;
+    }
+    return (revents != 0 || (usource->due_us != INT64_MAX
+                             && usource->due_us <= g_source_get_time(source)));
+}
+
+
 /** Destroy notify callback for FDs maintained by the USB event source.
  */
 static void usb_source_free_pollfd(void *data)
@@ -216,7 +237,7 @@ static GSource *usb_source_new(struct sr_session *session,
 {
 	static GSourceFuncs usb_source_funcs = {
 		.prepare  = &usb_source_prepare,
-		.check    = NULL,
+		.check    = &usb_source_check,
 		.dispatch = &usb_source_dispatch,
 		.finalize = NULL
 	};
