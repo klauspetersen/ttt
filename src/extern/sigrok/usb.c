@@ -253,15 +253,8 @@ static GSource *usb_source_new(struct sr_session *session,
 	source = g_source_new(&usb_source_funcs, sizeof(struct usb_source));
 	usource = (struct usb_source *)source;
 
-	g_source_set_name(source, "usb");
-
-	if (timeout_ms >= 0) {
-		usource->timeout_us = 1000 * (int64_t)timeout_ms;
-		usource->due_us = 0;
-	} else {
-		usource->timeout_us = -1;
-		usource->due_us = INT64_MAX;
-	}
+	usource->timeout_us = 1000 * (int64_t)timeout_ms;
+	usource->due_us = 0;
 	usource->session = session;
 	usource->usb_ctx = usb_ctx;
 	usource->pollfds = g_ptr_array_new_full(8, &usb_source_free_pollfd);

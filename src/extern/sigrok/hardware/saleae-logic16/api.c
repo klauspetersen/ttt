@@ -267,9 +267,6 @@ int receive_data(int fd, int revents, void *cb_data) {
     tv.tv_sec = tv.tv_usec = 0;
     libusb_handle_events_timeout(drvc->sr_ctx->libusb_ctx, &tv);
 
-    if (devc->sent_samples == -2) {
-        sr_err("sent_samples == -2");
-    }
 
     return TRUE;
 }

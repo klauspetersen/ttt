@@ -93,7 +93,6 @@ int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
 
     sr_info("dev_acquisition_start");
 
-    devc->sent_samples = 0;
     memset(devc->channel_data, 0, sizeof(devc->channel_data));
 
     devc->submitted_transfers = 0;

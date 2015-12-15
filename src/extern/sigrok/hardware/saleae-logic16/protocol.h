@@ -57,7 +57,6 @@ struct dev_context {
 	/* EEPROM data from address 8. */
 	uint8_t eeprom_data[8];
 
-	int64_t sent_samples;
 	int submitted_transfers;
 	int num_channels;
 	uint16_t channel_masks[16];
