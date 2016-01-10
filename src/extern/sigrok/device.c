@@ -70,41 +70,6 @@ SR_PRIV struct sr_channel *sr_channel_new(struct sr_dev_inst *sdi,
 
 
 /** @private
- *  Free device instance struct created by sr_dev_inst().
- *  @param sdi device instance to free.
- */
-SR_PRIV void sr_dev_inst_free(struct sr_dev_inst *sdi)
-{
-	struct sr_channel *ch;
-	struct sr_channel_group *cg;
-	GSList *l;
-
-	for (l = sdi->channels; l; l = l->next) {
-		ch = l->data;
-		g_free(ch->name);
-		g_free(ch->priv);
-		g_free(ch);
-	}
-	g_slist_free(sdi->channels);
-
-	for (l = sdi->channel_groups; l; l = l->next) {
-		cg = l->data;
-		g_free(cg->name);
-		g_slist_free(cg->channels);
-		g_free(cg->priv);
-		g_free(cg);
-	}
-	g_slist_free(sdi->channel_groups);
-
-	g_free(sdi->vendor);
-	g_free(sdi->model);
-	g_free(sdi->version);
-	g_free(sdi->serial_num);
-	g_free(sdi->connection_id);
-	g_free(sdi);
-}
-
-/** @private
  *  Allocate and init struct for USB device instance.
  *  @param[in]  bus @copydoc sr_usb_dev_inst::bus
  *  @param[in]  address @copydoc sr_usb_dev_inst::address
@@ -132,26 +97,4 @@ SR_PRIV struct sr_usb_dev_inst *sr_usb_dev_inst_new(uint8_t bus,
 SR_PRIV void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb)
 {
 	g_free(usb);
-}
-
-
-/**
- * Open the specified device.
- *
- * @param sdi Device instance to use. Must not be NULL.
- *
- * @return SR_OK upon success, a negative error code upon errors.
- *
- * @since 0.2.0
- */
-SR_API int sr_dev_open(struct sr_dev_inst *sdi)
-{
-	int ret;
-
-	if (!sdi || !sdi->driver || !sdi->driver->dev_open)
-		return SR_ERR;
-
-	ret = sdi->driver->dev_open(sdi);
-
-	return ret;
 }

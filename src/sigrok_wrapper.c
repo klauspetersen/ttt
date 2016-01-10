@@ -6,7 +6,9 @@
 #include <glib.h>
 #include <libsigrok-internal.h>
 #include <string.h>
+#include <malloc.h>
 #include "hardware/saleae-logic16/protocol.h"
+#include <poll.h>
 
 static void sr_data_recv_cb(sr_wrap_packet_t *packet);
 
@@ -15,10 +17,9 @@ struct sr_context *sr_ctx = NULL;
 
 extern SR_PRIV struct sr_dev_driver saleae_logic16_driver_info;
 
-void sigrok_init(struct sr_context **ctx){
+void sigrok_init(struct sr_context **ctx) {
     struct sr_dev_driver *driver;
     struct sr_session *session;
-    struct sr_context *context;
     struct sr_dev_inst *sdi;
     struct drv_context *drvc;
     struct sr_channel;
@@ -28,10 +29,9 @@ void sigrok_init(struct sr_context **ctx){
 
     driver = &saleae_logic16_driver_info;
 
-    context = g_malloc0(sizeof(struct sr_context));
-    libusb_init(&context->libusb_ctx);
-    sr_resource_set_hooks(context, NULL, NULL, NULL, NULL);
-    sr_ctx = context;
+    sr_ctx = g_malloc0(sizeof(struct sr_context));
+    libusb_init(&sr_ctx->libusb_ctx);
+    sr_resource_set_hooks(sr_ctx, NULL, NULL, NULL, NULL);
 
     session = g_malloc0(sizeof(struct sr_session));
     session->ctx = ctx;
@@ -44,9 +44,9 @@ void sigrok_init(struct sr_context **ctx){
 
     GSList *devices = driver->scan(driver, NULL);
 
-    int i=0;
+    int i = 0;
     for (GSList *l = devices; l; l = l->next) {
-        sdiArr[i] = (struct sr_dev_inst *)l->data;
+        sdiArr[i] = (struct sr_dev_inst *) l->data;
         sdiArr[i]->id = i;
         sdiArr[i]->cb = sr_data_recv_cb;
         session->devs = g_slist_append(session->devs, sdiArr[i]);
@@ -73,7 +73,41 @@ void sigrok_init(struct sr_context **ctx){
     g_main_loop_run(main_loop);
 
     *ctx = sr_ctx;
+
+#if 0
+    const struct libusb_pollfd **upollfds = libusb_get_pollfds(sr_ctx->libusb_ctx);
+
+    while(1){
+        poll(upollfds)
+        libusb_handle_events(&sr_ctx->libusb_ctx);
+    }
+
+    free(upollfds);
+#endif
+
+
 }
+
+
+/** Custom GLib event source for libusb I/O.
+ * @internal
+ */
+struct usb_source {
+    GSource base;
+
+    int64_t timeout_us;
+    int64_t due_us;
+
+    /* Needed to keep track of installed sources */
+    struct sr_session *session;
+
+    struct libusb_context *usb_ctx;
+    GPtrArray *pollfds;
+};
+
+extern gboolean usb_source_prepare(GSource *source, int *timeout);
+extern gboolean usb_source_check(GSource *source);
+extern gboolean usb_source_dispatch(GSource *source, GSourceFunc callback, void *user_data);
 
 
 int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
@@ -109,7 +143,42 @@ int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
 
     sr_info("usb_source_add");
 
-    usb_source_add(sdi->session, devc->ctx, 1000, receive_data, (void *) sdi);
+    static GSourceFuncs usb_source_funcs = {
+            .prepare  = &usb_source_prepare,
+            .check    = &usb_source_check,
+            .dispatch = &usb_source_dispatch,
+            .finalize = NULL
+    };
+
+    GSource *source = g_source_new(&usb_source_funcs, sizeof(struct usb_source));
+    g_source_set_callback(source, (GSourceFunc)receive_data, cb_data, NULL);
+    g_source_attach(source, sdi->session->main_context);
+    g_source_unref(source);
+
+    struct usb_source *usource = (struct usb_source *)source;
+    usource->timeout_us = 1000 * (int64_t)1000;
+    usource->due_us = 0;
+    usource->session = sdi->session;
+    usource->usb_ctx = devc->ctx->libusb_ctx;
+    usource->pollfds = g_ptr_array_new_full(8, NULL);
+
+    const struct libusb_pollfd **upollfds = libusb_get_pollfds(devc->ctx->libusb_ctx);
+    for (const struct libusb_pollfd **upfd = upollfds; *upfd != NULL; upfd++) {
+        GPollFD *pollfd = g_slice_new(GPollFD);
+        pollfd->fd = (gintptr) ((*upfd)->fd);
+        pollfd->events = (*upfd)->events;
+        pollfd->revents = 0;
+
+        g_ptr_array_add(usource->pollfds, pollfd);
+        g_source_add_poll(&usource->base, pollfd);
+    }
+    free(upollfds);
+
+
+
+
+
+
 
     size = 160256;
     for (i = 0; i < devc->num_transfers; i++) {

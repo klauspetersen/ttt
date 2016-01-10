@@ -28,9 +28,6 @@
 
 #define LOG_PREFIX "usb"
 
-#if !HAVE_LIBUSB_OS_HANDLE
-typedef int libusb_os_handle;
-#endif
 
 /** Custom GLib event source for libusb I/O.
  * @internal
@@ -50,7 +47,7 @@ struct usb_source {
 
 /** USB event source prepare() method.
  */
-static gboolean usb_source_prepare(GSource *source, int *timeout)
+gboolean usb_source_prepare(GSource *source, int *timeout)
 {
 	int64_t now_us, usb_due_us;
 	struct usb_source *usource;
@@ -89,8 +86,8 @@ static gboolean usb_source_prepare(GSource *source, int *timeout)
 
 /** USB event source dispatch() method.
  */
-static gboolean usb_source_dispatch(GSource *source,
-		GSourceFunc callback, void *user_data)
+
+gboolean usb_source_dispatch(GSource *source, GSourceFunc callback, void *user_data)
 {
 	struct usb_source *usource;
 	GPollFD *pollfd;
@@ -132,7 +129,7 @@ static gboolean usb_source_dispatch(GSource *source,
 
 /** USB event source check() method.
  */
-static gboolean usb_source_check(GSource *source)
+gboolean usb_source_check(GSource *source)
 {
     struct usb_source *usource;
     GPollFD *pollfd;
@@ -148,48 +145,6 @@ static gboolean usb_source_check(GSource *source)
     }
     return (revents != 0 || (usource->due_us != INT64_MAX
                              && usource->due_us <= g_source_get_time(source)));
-}
-
-SR_PRIV int usb_source_add(struct sr_session *session, struct sr_context *ctx,
-		int timeout, sr_receive_data_callback cb, void *cb_data)
-{
-	GSource *source;
-
-    static GSourceFuncs usb_source_funcs = {
-            .prepare  = &usb_source_prepare,
-            .check    = &usb_source_check,
-            .dispatch = &usb_source_dispatch,
-            .finalize = NULL
-    };
-
-    struct usb_source *usource;
-    const struct libusb_pollfd **upollfds, **upfd;
-
-    source = g_source_new(&usb_source_funcs, sizeof(struct usb_source));
-    g_source_set_callback(source, (GSourceFunc)cb, cb_data, NULL);
-    g_source_attach(source, session->main_context);
-    g_source_unref(source);
-
-    usource = (struct usb_source *)source;
-    usource->timeout_us = 1000 * (int64_t)timeout;
-    usource->due_us = 0;
-    usource->session = session;
-    usource->usb_ctx = ctx->libusb_ctx;
-    usource->pollfds = g_ptr_array_new_full(8, NULL);
-
-    upollfds = libusb_get_pollfds(ctx->libusb_ctx);
-    for (upfd = upollfds; *upfd != NULL; upfd++) {
-        GPollFD *pollfd = g_slice_new(GPollFD);
-        pollfd->fd = (gintptr) ((*upfd)->fd);
-        pollfd->events = (*upfd)->events;
-        pollfd->revents = 0;
-
-        g_ptr_array_add(usource->pollfds, pollfd);
-        g_source_add_poll(&usource->base, pollfd);
-    }
-    free(upollfds);
-
-	return SR_OK;
 }
 
 SR_PRIV int usb_get_port_path(libusb_device *dev, char *path, int path_len)

@@ -165,7 +165,6 @@ SR_PRIV void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb);
 #endif
 
 #ifdef HAVE_LIBUSB_1_0
-SR_PRIV int usb_source_add(struct sr_session *session, struct sr_context *ctx, int timeout, sr_receive_data_callback cb, void *cb_data);
 SR_PRIV int usb_get_port_path(libusb_device *dev, char *path, int path_len);
 #endif
 
