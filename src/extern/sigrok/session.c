@@ -115,10 +115,10 @@ SR_PRIV int sr_session_source_add_internal(struct sr_session *session,
 		sr_err("Event source with key %p already exists.", key);
 		return SR_ERR_BUG;
 	}
-	g_hash_table_insert(session->event_sources, key, source);
+	//g_hash_table_insert(session->event_sources, key, source);
 
-	if (session_source_attach(session, source) == 0)
-		return SR_ERR;
+	g_source_attach(source, session->main_context);
+
 
 	return SR_OK;
 }

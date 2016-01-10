@@ -44,11 +44,6 @@ static const char *channel_names[] = {
 };
 
 
-static int init(struct sr_dev_driver *di, struct sr_context *sr_ctx) {
-    return std_init(sr_ctx, di, LOG_PREFIX);
-}
-
-
 
 static GSList *scan(struct sr_dev_driver *di, GSList *options) {
     struct drv_context *drvc;
@@ -334,7 +329,7 @@ SR_PRIV struct sr_dev_driver saleae_logic16_driver_info = {
         .name = "saleae-logic16",
         .longname = "Saleae Logic16",
         .api_version = 1,
-        .init = init,
+        .init = NULL,
         .cleanup = NULL,
         .scan = scan,
         .dev_list = dev_list,

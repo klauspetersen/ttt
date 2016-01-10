@@ -23,12 +23,6 @@ static void consumer_recv(){
 void loop(){
     struct sr_context *ctx;
     sigrok_init(&ctx);
-
-
-
-
-
-
 }
 
 int main()

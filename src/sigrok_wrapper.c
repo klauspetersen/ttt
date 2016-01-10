@@ -20,6 +20,7 @@ void sigrok_init(struct sr_context **ctx){
     struct sr_session *session;
     struct sr_context *context;
     struct sr_dev_inst *sdi;
+    struct drv_context *drvc;
     struct sr_channel;
     GSList *l;
 
@@ -36,9 +37,13 @@ void sigrok_init(struct sr_context **ctx){
     session->ctx = ctx;
     session->event_sources = g_hash_table_new(NULL, NULL);
 
-    driver->init(driver, sr_ctx);
+    drvc = g_malloc0(sizeof(struct drv_context));
+    drvc->sr_ctx = sr_ctx;
+    drvc->instances = NULL;
+    driver->context = drvc;
 
-    GSList *devices = sr_driver_scan(driver, NULL);
+
+    GSList *devices = driver->scan(driver, NULL);
 
     int i=0;
     for (GSList *l = devices; l; l = l->next) {
@@ -52,8 +57,6 @@ void sigrok_init(struct sr_context **ctx){
     }
 
     session->main_context = g_main_context_ref_thread_default();
-    g_main_context_acquire(session->main_context);
-    g_main_context_release(session->main_context);
 
     /* Have all devices start acquisition. */
     for (l = session->devs; l; l = l->next) {
@@ -121,13 +124,10 @@ int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
         devc->transfers[i] = transfer;
         devc->submitted_transfers++;
     }
-
     return SR_OK;
 }
 
 static void sr_data_recv_cb(sr_wrap_packet_t *packet){
-    //char buf[9];
-
     for(int i=0; i< packet->size; i++){
         //printf("%s\n", byte2bin(((uint8_t*)packet->data)[i], buf));
         if(((uint8_t*)packet->data)[i] != 0) {
