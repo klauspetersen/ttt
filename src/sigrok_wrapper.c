@@ -35,7 +35,6 @@ void sigrok_init(struct sr_context **ctx){
 
     session = g_malloc0(sizeof(struct sr_session));
     session->ctx = ctx;
-    session->event_sources = g_hash_table_new(NULL, NULL);
 
     drvc = g_malloc0(sizeof(struct drv_context));
     drvc->sr_ctx = sr_ctx;

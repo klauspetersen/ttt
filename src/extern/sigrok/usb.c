@@ -25,9 +25,6 @@
 #include "libsigrok.h"
 #include "libsigrok-internal.h"
 
-/* SR_CONF_CONN takes one of these: */
-#define CONN_USB_VIDPID  "^([0-9a-z]{4})\\.([0-9a-z]{4})$"
-#define CONN_USB_BUSADDR "^(\\d+)\\.(\\d+)$"
 
 #define LOG_PREFIX "usb"
 
@@ -114,7 +111,7 @@ static gboolean usb_source_dispatch(GSource *source,
 	}
 	if (revents != 0)
 		sr_spew("%s: revents 0x%.2X", __func__, revents);
-	else
+	else/* SR_CONF_CONN takes one of these: */
 		sr_spew("%s: timed out", __func__);
 
 	if (!callback) {
@@ -131,58 +128,6 @@ static gboolean usb_source_dispatch(GSource *source,
 			usource->due_us = INT64_MAX;
 	}
 	return keep;
-}
-
-/** Callback invoked when a new libusb FD should be added to the poll set.
- */
-static LIBUSB_CALL void usb_pollfd_added(libusb_os_handle fd,
-		short events, void *user_data)
-{
-	struct usb_source *usource;
-	GPollFD *pollfd;
-
-	usource = user_data;
-
-	if (G_UNLIKELY(g_source_is_destroyed(&usource->base)))
-		return;
-
-	pollfd = g_slice_new(GPollFD);
-#ifdef G_OS_WIN32
-	events = G_IO_IN;
-#endif
-	pollfd->fd = (gintptr)fd;
-	pollfd->events = events;
-	pollfd->revents = 0;
-
-	g_ptr_array_add(usource->pollfds, pollfd);
-	g_source_add_poll(&usource->base, pollfd);
-}
-
-/** Callback invoked when a libusb FD should be removed from the poll set.
- */
-static LIBUSB_CALL void usb_pollfd_removed(libusb_os_handle fd, void *user_data)
-{
-	struct usb_source *usource;
-	GPollFD *pollfd;
-	unsigned int i;
-
-	usource = user_data;
-
-	if (G_UNLIKELY(g_source_is_destroyed(&usource->base)))
-		return;
-
-	/* It's likely that the removed poll FD is at the end.
-	 */
-	for (i = usource->pollfds->len; G_LIKELY(i > 0); i--) {
-		pollfd = g_ptr_array_index(usource->pollfds, i - 1);
-
-		if ((libusb_os_handle)pollfd->fd == fd) {
-			g_source_remove_poll(&usource->base, pollfd);
-			g_ptr_array_remove_index_fast(usource->pollfds, i - 1);
-			return;
-		}
-	}
-	sr_err("FD to be removed (%" G_GINTPTR_FORMAT ") not found in event source poll set.", (gintptr)fd);
 }
 
 /** USB event source check() method.
@@ -205,86 +150,46 @@ static gboolean usb_source_check(GSource *source)
                              && usource->due_us <= g_source_get_time(source)));
 }
 
-
-/** Destroy notify callback for FDs maintained by the USB event source.
- */
-static void usb_source_free_pollfd(void *data)
-{
-	g_slice_free(GPollFD, data);
-}
-
-/** Create an event source for libusb I/O.
- *
- * TODO: The combination of the USB I/O source with a user timeout is
- * conceptually broken. The user timeout supplied here is completely
- * unrelated to I/O -- the actual I/O timeout is set when submitting
- * a USB transfer.
- * The sigrok drivers generally use the timeout to poll device state.
- * Usually, this polling can be sensibly done only when there is no
- * active USB transfer -- i.e. it's actually mutually exclusive with
- * waiting for transfer completion.
- * Thus, the user timeout should be removed from the USB event source
- * API at some point. Instead, drivers should install separate timer
- * event sources for their polling needs.
- *
- * @param session The session the event source belongs to.
- * @param usb_ctx The libusb context for which to handle events.
- * @param timeout_ms The timeout interval in ms, or -1 to wait indefinitely.
- * @return A new event source object, or NULL on failure.
- */
-static GSource *usb_source_new(struct sr_session *session,
-		struct libusb_context *usb_ctx, int timeout_ms)
-{
-	static GSourceFuncs usb_source_funcs = {
-		.prepare  = &usb_source_prepare,
-		.check    = &usb_source_check,
-		.dispatch = &usb_source_dispatch,
-		.finalize = NULL
-	};
-	GSource *source;
-	struct usb_source *usource;
-	const struct libusb_pollfd **upollfds, **upfd;
-
-	upollfds = libusb_get_pollfds(usb_ctx);
-	if (!upollfds) {
-		sr_err("Failed to get libusb file descriptors.");
-		return NULL;
-	}
-	source = g_source_new(&usb_source_funcs, sizeof(struct usb_source));
-	usource = (struct usb_source *)source;
-
-	usource->timeout_us = 1000 * (int64_t)timeout_ms;
-	usource->due_us = 0;
-	usource->session = session;
-	usource->usb_ctx = usb_ctx;
-	usource->pollfds = g_ptr_array_new_full(8, &usb_source_free_pollfd);
-
-	for (upfd = upollfds; *upfd != NULL; upfd++)
-		usb_pollfd_added((*upfd)->fd, (*upfd)->events, usource);
-
-	free(upollfds);
-
-	libusb_set_pollfd_notifiers(usb_ctx, &usb_pollfd_added, &usb_pollfd_removed, usource);
-
-	return source;
-}
-
 SR_PRIV int usb_source_add(struct sr_session *session, struct sr_context *ctx,
 		int timeout, sr_receive_data_callback cb, void *cb_data)
 {
 	GSource *source;
-	int ret;
 
-	source = usb_source_new(session, ctx->libusb_ctx, timeout);
-	if (!source)
-		return SR_ERR;
+    static GSourceFuncs usb_source_funcs = {
+            .prepare  = &usb_source_prepare,
+            .check    = &usb_source_check,
+            .dispatch = &usb_source_dispatch,
+            .finalize = NULL
+    };
 
-	g_source_set_callback(source, (GSourceFunc)cb, cb_data, NULL);
+    struct usb_source *usource;
+    const struct libusb_pollfd **upollfds, **upfd;
 
-	ret = sr_session_source_add_internal(session, ctx->libusb_ctx, source);
-	g_source_unref(source);
+    source = g_source_new(&usb_source_funcs, sizeof(struct usb_source));
+    g_source_set_callback(source, (GSourceFunc)cb, cb_data, NULL);
+    g_source_attach(source, session->main_context);
+    g_source_unref(source);
 
-	return ret;
+    usource = (struct usb_source *)source;
+    usource->timeout_us = 1000 * (int64_t)timeout;
+    usource->due_us = 0;
+    usource->session = session;
+    usource->usb_ctx = ctx->libusb_ctx;
+    usource->pollfds = g_ptr_array_new_full(8, NULL);
+
+    upollfds = libusb_get_pollfds(ctx->libusb_ctx);
+    for (upfd = upollfds; *upfd != NULL; upfd++) {
+        GPollFD *pollfd = g_slice_new(GPollFD);
+        pollfd->fd = (gintptr) ((*upfd)->fd);
+        pollfd->events = (*upfd)->events;
+        pollfd->revents = 0;
+
+        g_ptr_array_add(usource->pollfds, pollfd);
+        g_source_add_poll(&usource->base, pollfd);
+    }
+    free(upollfds);
+
+	return SR_OK;
 }
 
 SR_PRIV int usb_get_port_path(libusb_device *dev, char *path, int path_len)

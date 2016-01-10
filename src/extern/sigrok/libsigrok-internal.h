@@ -184,10 +184,6 @@ struct sr_session {
 	/** Context of the session main loop. */
 	GMainContext *main_context;
 
-	/** Registered event sources for this session. */
-	GHashTable *event_sources;
-	/** Session main loop. */
-
 };
 
 SR_PRIV int sr_session_source_add_internal(struct sr_session *session, void *key, GSource *source);
