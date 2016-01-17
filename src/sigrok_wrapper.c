@@ -17,6 +17,7 @@ struct sr_context *sr_ctx = NULL;
 
 extern SR_PRIV struct sr_dev_driver saleae_logic16_driver_info;
 
+
 void sigrok_init(struct sr_context **ctx) {
     struct sr_dev_driver *driver;
     struct sr_session *session;
@@ -24,8 +25,6 @@ void sigrok_init(struct sr_context **ctx) {
     struct drv_context *drvc;
     struct sr_channel;
     GSList *l;
-
-    GMainLoop *main_loop;
 
     driver = &saleae_logic16_driver_info;
 
@@ -69,25 +68,50 @@ void sigrok_init(struct sr_context **ctx) {
         sdi->driver->dev_acquisition_trigger(sdi);
     }
 
-    main_loop = g_main_loop_new(NULL, FALSE);
-    g_main_loop_run(main_loop);
+
 
     *ctx = sr_ctx;
-
 #if 0
-    const struct libusb_pollfd **upollfds = libusb_get_pollfds(sr_ctx->libusb_ctx);
+    GMainLoop *main_loop = g_main_loop_new(NULL, FALSE);
+    g_main_loop_run(main_loop);
 
-    while(1){
-        poll(upollfds)
-        libusb_handle_events(&sr_ctx->libusb_ctx);
+#else
+    int poll_ret;
+    const struct libusb_pollfd **poll_usb;
+    struct pollfd pollfd_array[20];
+    struct timeval tv;
+    int completed;
+    int fdCnt;
+
+    //get device handle and claim interface
+    //also set up context
+
+    tv.tv_usec = 0;
+    poll_usb = libusb_get_pollfds(sr_ctx->libusb_ctx);
+
+    for (fdCnt = 0; poll_usb[fdCnt] != NULL; fdCnt++) {
+        pollfd_array[fdCnt].fd = poll_usb[fdCnt]->fd;
+        pollfd_array[fdCnt].events = poll_usb[fdCnt]->events;
     }
 
-    free(upollfds);
+    while(1) {
+        poll_ret = poll(pollfd_array, fdCnt, 5000); // timeout of 5 seconds
+        //so here poll wont trigger even though i know there is data ready to be received
+        //i'm sending data from another thread to the usb device, and it replies but doesn't trigger poll
+        if (poll_ret > 0) {
+            //perform receive functions
+            //printf("poll_ret > 0 %d\n", poll_ret);
+            libusb_handle_events_timeout_completed(sr_ctx->libusb_ctx, &tv, &completed);
+            //printf("Completed: %d\n", completed);
+            completed = 0;
+        }
+        else {
+            //printf("poll_ret = 0");
+            //timeout occurs or pipe error
+        }
+    }
 #endif
-
-
 }
-
 
 /** Custom GLib event source for libusb I/O.
  * @internal
@@ -150,6 +174,7 @@ int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
             .finalize = NULL
     };
 
+#if 0
     GSource *source = g_source_new(&usb_source_funcs, sizeof(struct usb_source));
     g_source_set_callback(source, (GSourceFunc)receive_data, cb_data, NULL);
     g_source_attach(source, sdi->session->main_context);
@@ -162,6 +187,7 @@ int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
     usource->usb_ctx = devc->ctx->libusb_ctx;
     usource->pollfds = g_ptr_array_new_full(8, NULL);
 
+
     const struct libusb_pollfd **upollfds = libusb_get_pollfds(devc->ctx->libusb_ctx);
     for (const struct libusb_pollfd **upfd = upollfds; *upfd != NULL; upfd++) {
         GPollFD *pollfd = g_slice_new(GPollFD);
@@ -173,12 +199,7 @@ int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
         g_source_add_poll(&usource->base, pollfd);
     }
     free(upollfds);
-
-
-
-
-
-
+#endif
 
     size = 160256;
     for (i = 0; i < devc->num_transfers; i++) {
