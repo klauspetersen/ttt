@@ -3,8 +3,6 @@
 //
 
 #include "sigrok_wrapper.h"
-#include <glib.h>
-#include <libsigrok-internal.h>
 #include <string.h>
 #include <malloc.h>
 #include "hardware/saleae-logic16/protocol.h"
@@ -40,7 +38,6 @@ void sigrok_init(struct sr_context **ctx) {
     drvc->instances = NULL;
     driver->context = drvc;
 
-
     GSList *devices = driver->scan(driver, NULL);
 
     int i = 0;
@@ -68,23 +65,13 @@ void sigrok_init(struct sr_context **ctx) {
         sdi->driver->dev_acquisition_trigger(sdi);
     }
 
-
-
     *ctx = sr_ctx;
-#if 0
-    GMainLoop *main_loop = g_main_loop_new(NULL, FALSE);
-    g_main_loop_run(main_loop);
 
-#else
-    int poll_ret;
     const struct libusb_pollfd **poll_usb;
     struct pollfd pollfd_array[20];
     struct timeval tv;
     int completed;
     int fdCnt;
-
-    //get device handle and claim interface
-    //also set up context
 
     tv.tv_usec = 0;
     poll_usb = libusb_get_pollfds(sr_ctx->libusb_ctx);
@@ -95,43 +82,15 @@ void sigrok_init(struct sr_context **ctx) {
     }
 
     while(1) {
-        poll_ret = poll(pollfd_array, fdCnt, 5000); // timeout of 5 seconds
-        //so here poll wont trigger even though i know there is data ready to be received
-        //i'm sending data from another thread to the usb device, and it replies but doesn't trigger poll
-        if (poll_ret > 0) {
-            //perform receive functions
-            //printf("poll_ret > 0 %d\n", poll_ret);
+        if (poll(pollfd_array, fdCnt, 5000)) {
             libusb_handle_events_timeout_completed(sr_ctx->libusb_ctx, &tv, &completed);
-            //printf("Completed: %d\n", completed);
-            completed = 0;
-        }
-        else {
-            //printf("poll_ret = 0");
-            //timeout occurs or pipe error
+            if(completed != 0){
+                printf("%d\n", completed);
+                completed = 0;
+            }
         }
     }
-#endif
 }
-
-/** Custom GLib event source for libusb I/O.
- * @internal
- */
-struct usb_source {
-    GSource base;
-
-    int64_t timeout_us;
-    int64_t due_us;
-
-    /* Needed to keep track of installed sources */
-    struct sr_session *session;
-
-    struct libusb_context *usb_ctx;
-    GPtrArray *pollfds;
-};
-
-extern gboolean usb_source_prepare(GSource *source, int *timeout);
-extern gboolean usb_source_check(GSource *source);
-extern gboolean usb_source_dispatch(GSource *source, GSourceFunc callback, void *user_data);
 
 
 int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
@@ -161,45 +120,9 @@ int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
 
     /* Allocate transfer buffers */
     devc->num_transfers = 100;
-    devc->transfers = g_try_malloc0(sizeof(*devc->transfers) * devc->num_transfers);
+    devc->transfers = malloc(sizeof(*devc->transfers) * devc->num_transfers);
 
     devc->ctx = drvc->sr_ctx;
-
-    sr_info("usb_source_add");
-
-    static GSourceFuncs usb_source_funcs = {
-            .prepare  = &usb_source_prepare,
-            .check    = &usb_source_check,
-            .dispatch = &usb_source_dispatch,
-            .finalize = NULL
-    };
-
-#if 0
-    GSource *source = g_source_new(&usb_source_funcs, sizeof(struct usb_source));
-    g_source_set_callback(source, (GSourceFunc)receive_data, cb_data, NULL);
-    g_source_attach(source, sdi->session->main_context);
-    g_source_unref(source);
-
-    struct usb_source *usource = (struct usb_source *)source;
-    usource->timeout_us = 1000 * (int64_t)1000;
-    usource->due_us = 0;
-    usource->session = sdi->session;
-    usource->usb_ctx = devc->ctx->libusb_ctx;
-    usource->pollfds = g_ptr_array_new_full(8, NULL);
-
-
-    const struct libusb_pollfd **upollfds = libusb_get_pollfds(devc->ctx->libusb_ctx);
-    for (const struct libusb_pollfd **upfd = upollfds; *upfd != NULL; upfd++) {
-        GPollFD *pollfd = g_slice_new(GPollFD);
-        pollfd->fd = (gintptr) ((*upfd)->fd);
-        pollfd->events = (*upfd)->events;
-        pollfd->revents = 0;
-
-        g_ptr_array_add(usource->pollfds, pollfd);
-        g_source_add_poll(&usource->base, pollfd);
-    }
-    free(upollfds);
-#endif
 
     size = 160256;
     for (i = 0; i < devc->num_transfers; i++) {
