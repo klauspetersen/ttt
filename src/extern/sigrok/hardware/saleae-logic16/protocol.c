@@ -673,48 +673,6 @@ SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi){
 	return ret;
 }
 
-#if 0
-static size_t convert_sample_data(struct dev_context *devc, uint8_t *dest, size_t destcnt, const uint8_t *src, size_t srccnt){
-    uint16_t *channel_data;
-    int i, cur_channel;
-    size_t ret = 0;
-    uint16_t sample, channel_mask;
-
-    srccnt /= 2;
-
-    channel_data = devc->channel_data;
-    cur_channel = devc->cur_channel;
-
-    while (srccnt--) {
-        sample = src[0] | (src[1] << 8);
-        src += 2;
-
-        channel_mask = devc->channel_masks[cur_channel];
-
-        for (i = 15; i >= 0; --i, sample >>= 1)
-            if (sample & 1)
-                channel_data[i] |= channel_mask;
-
-        if (++cur_channel == devc->num_channels) {
-            cur_channel = 0;
-            if (destcnt < 16 * 2) {
-                sr_err("Conversion buffer too small!");
-                break;
-            }
-            memcpy(dest, channel_data, 16 * 2);
-            memset(channel_data, 0, 16 * 2);
-            dest += 16 * 2;
-            ret += 16;
-            destcnt -= 16 * 2;
-        }
-    }
-
-    devc->cur_channel = cur_channel;
-
-    return ret;
-}
-#endif
-
 extern volatile int throughput;
 
 

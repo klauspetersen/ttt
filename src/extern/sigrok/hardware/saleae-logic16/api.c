@@ -242,88 +242,9 @@ static int dev_open(struct sr_dev_inst *sdi) {
     return SR_OK;
 }
 
-int receive_data(int fd, int revents, void *cb_data) {
-    struct timeval tv;
-    struct dev_context *devc;
-    struct drv_context *drvc;
-    const struct sr_dev_inst *sdi;
-    struct sr_dev_driver *di;
-
-    (void) fd;
-    (void) revents;
-
-    //sr_info("receive_data");
-
-    sdi = cb_data;
-    di = sdi->driver;
-    drvc = di->context;
-    devc = sdi->priv;
-
-    tv.tv_sec = tv.tv_usec = 0;
-    libusb_handle_events_timeout(drvc->sr_ctx->libusb_ctx, &tv);
-
-
-    return TRUE;
-}
-
-#if 0
-static int dev_acquisition_start(const struct sr_dev_inst *sdi, void *cb_data) {
-    struct sr_dev_driver *di = sdi->driver;
-    struct dev_context *devc;
-    struct drv_context *drvc;
-    struct sr_usb_dev_inst *usb;
-    struct libusb_transfer *transfer;
-    unsigned int i;
-    unsigned char *buf;
-    size_t size;
-
-    if (sdi->status != SR_ST_ACTIVE)
-        return SR_ERR_DEV_CLOSED;
-
-    drvc = di->context;
-    devc = sdi->priv;
-    usb = sdi->conn;
-
-    sr_info("dev_acquisition_start");
-
-    devc->sent_samples = 0;
-    memset(devc->channel_data, 0, sizeof(devc->channel_data));
-
-    devc->submitted_transfers = 0;
-
-    logic16_setup_acquisition(sdi, devc->cur_samplerate);
-
-    /* Allocate transfer buffers */
-    devc->num_transfers = 100;
-    devc->transfers = g_try_malloc0(sizeof(*devc->transfers) * devc->num_transfers);
-
-    devc->ctx = drvc->sr_ctx;
-
-    sr_info("usb_source_add");
-
-    usb_source_add(sdi->session, devc->ctx, 1000, receive_data, (void *) sdi);
-
-    size = 160256;
-    for (i = 0; i < devc->num_transfers; i++) {
-        buf = g_try_malloc(size);
-
-        sr_info("sdi id: %d", sdi->id);
-        transfer = libusb_alloc_transfer(0);
-        libusb_fill_bulk_transfer(transfer, usb->devhdl, 2 | LIBUSB_ENDPOINT_IN, buf, size, logic16_receive_transfer, (void *) sdi, 5000);
-        libusb_submit_transfer(transfer);
-
-        devc->transfers[i] = transfer;
-        devc->submitted_transfers++;
-    }
-
-    return SR_OK;
-}
-#endif
-
 static int dev_acquisition_trigger(const struct sr_dev_inst *sdi) {
     return logic16_start_acquisition(sdi);
 }
-
 
 SR_PRIV struct sr_dev_driver saleae_logic16_driver_info = {
         .name = "saleae-logic16",
