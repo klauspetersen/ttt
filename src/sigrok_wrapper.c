@@ -7,13 +7,25 @@
 #include <malloc.h>
 #include "hardware/saleae-logic16/protocol.h"
 #include <poll.h>
+#include <stdlib.h>
+#include <assert.h>
 
+#define LOGIC16_VID        0x21a9
+#define LOGIC16_PID        0x1001
+
+#define USB_INTERFACE        0
+#define USB_CONFIGURATION    1
+#define FX2_FIRMWARE        "saleae-logic16-fx2.fw"
 static void sr_data_recv_cb(sr_wrap_packet_t *packet);
+static int dev_open(struct sr_dev_inst *sdi);
+GSList *scan(struct sr_dev_driver *di, GSList *options);
+int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data);
+static int dev_acquisition_trigger(const struct sr_dev_inst *sdi);
 
 struct sr_dev_inst *sdiArr[SIGROK_WRAPPER_MAX_DEVICES];
 struct sr_context *sr_ctx = NULL;
 
-extern SR_PRIV struct sr_dev_driver saleae_logic16_driver_info;
+struct sr_dev_driver saleae_logic16_driver_info;
 
 
 void sigrok_init(struct sr_context **ctx) {
@@ -38,7 +50,7 @@ void sigrok_init(struct sr_context **ctx) {
     drvc->instances = NULL;
     driver->context = drvc;
 
-    GSList *devices = driver->scan(driver, NULL);
+    GSList *devices = scan(driver, NULL);
 
     int i = 0;
     for (GSList *l = devices; l; l = l->next) {
@@ -46,12 +58,9 @@ void sigrok_init(struct sr_context **ctx) {
         sdiArr[i]->id = i;
         sdiArr[i]->cb = sr_data_recv_cb;
         session->devs = g_slist_append(session->devs, sdiArr[i]);
-        sdiArr[i]->session = session;
-        sdiArr[i]->driver->dev_open(sdiArr[i]); /* Calls upload */
+        dev_open(sdiArr[i]); /* Calls upload */
         i++;
     }
-
-    session->main_context = g_main_context_ref_thread_default();
 
     /* Have all devices start acquisition. */
     for (l = session->devs; l; l = l->next) {
@@ -62,7 +71,7 @@ void sigrok_init(struct sr_context **ctx) {
     /* Have all devices fire. */
     for (l = session->devs; l; l = l->next) {
         sdi = l->data;
-        sdi->driver->dev_acquisition_trigger(sdi);
+        dev_acquisition_trigger(sdi);
     }
 
     *ctx = sr_ctx;
@@ -148,3 +157,186 @@ static void sr_data_recv_cb(sr_wrap_packet_t *packet){
     }
 }
 
+
+GSList *scan(struct sr_dev_driver *di, GSList *options) {
+    struct drv_context *drvc;
+    struct dev_context *devc;
+    struct sr_dev_inst *sdi;
+    GSList *devices;
+    struct libusb_device_descriptor des;
+    libusb_device **devlist;
+    unsigned int i;
+    char connection_id[64];
+
+    sr_info("Scanning for device.");
+
+    drvc = di->context;
+
+    /* Find all Logic16 devices and upload firmware to them. */
+    devices = NULL;
+    libusb_get_device_list(drvc->sr_ctx->libusb_ctx, &devlist);
+    for (i = 0; devlist[i]; i++) {
+        libusb_get_device_descriptor(devlist[i], &des);
+
+        usb_get_port_path(devlist[i], connection_id, sizeof(connection_id));
+
+        if (des.idVendor != LOGIC16_VID || des.idProduct != LOGIC16_PID)
+            continue;
+
+        sdi = g_malloc0(sizeof(struct sr_dev_inst));
+        sdi->status = SR_ST_INITIALIZING;
+        sdi->driver = di;
+        sdi->connection_id = g_strdup(connection_id);
+
+        devc = g_malloc0(sizeof(struct dev_context));
+        devc->selected_voltage_range = VOLTAGE_RANGE_18_33_V;
+        sdi->priv = devc;
+        drvc->instances = g_slist_append(drvc->instances, sdi);
+        devices = g_slist_append(devices, sdi);
+
+        if (ezusb_upload_firmware(drvc->sr_ctx, devlist[i], USB_CONFIGURATION, FX2_FIRMWARE) != SR_OK) {
+            sr_err("Firmware upload failed.");
+        }
+        sdi->conn = sr_usb_dev_inst_new(libusb_get_bus_number(devlist[i]), 0xff, NULL);
+    }
+
+    libusb_free_device_list(devlist, 1);
+
+    return devices;
+}
+
+
+static int logic16_dev_open(struct sr_dev_inst *sdi) {
+    struct sr_dev_driver *di;
+    libusb_device **devlist;
+    struct sr_usb_dev_inst *usb;
+    struct libusb_device_descriptor des;
+    struct drv_context *drvc;
+    int ret, i, device_count;
+    char connection_id[64];
+
+    di = sdi->driver;
+    drvc = di->context;
+    usb = sdi->conn;
+
+    if (sdi->status == SR_ST_ACTIVE) {
+        sr_err("Device already in use");
+        return SR_ERR;
+    }
+
+    device_count = libusb_get_device_list(drvc->sr_ctx->libusb_ctx, &devlist);
+
+    sr_info("Device count: %d", device_count);
+
+    for (size_t idx = 0; idx < device_count; ++idx) {
+        struct libusb_device *device = devlist[idx];
+        struct libusb_device_descriptor desc = {0};
+
+        ret = libusb_get_device_descriptor(device, &desc);
+        assert(ret == 0);
+
+        sr_info("Vendor:Device = %04x:%04x\n", desc.idVendor, desc.idProduct);
+    }
+
+    if (device_count < 0) {
+        sr_err("Failed to get device list: %s.", libusb_error_name(device_count));
+        return SR_ERR;
+    }
+
+    for (i = 0; i < device_count; i++) {
+        libusb_get_device_descriptor(devlist[i], &des);
+
+        if (des.idVendor != LOGIC16_VID || des.idProduct != LOGIC16_PID) {
+            sr_info("Vendor or PID did not match.");
+            continue;
+        }
+
+        if ((sdi->status == SR_ST_INITIALIZING) || (sdi->status == SR_ST_INACTIVE)) {
+            /*
+             * Check device by its physical USB bus/port address.
+             */
+            usb_get_port_path(devlist[i], connection_id, sizeof(connection_id));
+            if (strcmp(sdi->connection_id, connection_id)) {
+                sr_info("Connection id did not match");
+                /* This is not the one. */
+                continue;
+            } else {
+                sr_info("Connection match: %s", sdi->connection_id);
+            }
+        }
+
+        if (!(ret = libusb_open(devlist[i], &usb->devhdl))) {
+            if (usb->address == 0xff) {
+                /*
+                 * First time we touch this device after FW
+                 * upload, so we don't know the address yet.
+                 */
+                usb->address = libusb_get_device_address(devlist[i]);
+            }
+        } else {
+            sr_err("Failed to open device: %s.", libusb_error_name(ret));
+            break;
+        }
+
+        ret = libusb_claim_interface(usb->devhdl, USB_INTERFACE);
+        if (ret == LIBUSB_ERROR_BUSY) {
+            sr_err("Unable to claim USB interface. Another program or driver has already claimed it.");
+            break;
+        } else if (ret == LIBUSB_ERROR_NO_DEVICE) {
+            sr_err("Device has been disconnected.");
+            break;
+        } else if (ret != 0) {
+            sr_err("Unable to claim interface: %s.", libusb_error_name(ret));
+            break;
+        }
+
+        if (logic16_init_device(sdi) != SR_OK) {
+            sr_err("Failed to init device.");
+            break;
+        }
+
+        sdi->status = SR_ST_ACTIVE;
+        sr_info("Opened device on %d.%d (logical) / %s (physical), interface %d.", usb->bus, usb->address,
+                sdi->connection_id, USB_INTERFACE);
+        break;
+    }
+    libusb_free_device_list(devlist, 1);
+
+    if (sdi->status != SR_ST_ACTIVE) {
+        sr_info("Device not in active state");
+        if (usb->devhdl) {
+            libusb_release_interface(usb->devhdl, USB_INTERFACE);
+            libusb_close(usb->devhdl);
+            usb->devhdl = NULL;
+        }
+        return SR_ERR;
+    }
+
+    return SR_OK;
+}
+
+static int dev_open(struct sr_dev_inst *sdi) {
+    struct dev_context *devc;
+
+    devc = sdi->priv;
+
+    sr_info("Waiting for device to reset.");
+    while (1) {
+        if (logic16_dev_open(sdi) == SR_OK) {
+            sr_info("Device found.");
+            break;
+        }
+
+        sr_info("No device found.");
+        g_usleep(100 * 1000);
+    }
+
+    devc->cur_samplerate = SR_MHZ(16);
+    sr_info("Samplerate set to %d", (uint32_t) devc->cur_samplerate);
+
+    return SR_OK;
+}
+
+static int dev_acquisition_trigger(const struct sr_dev_inst *sdi) {
+    return logic16_start_acquisition(sdi);
+}

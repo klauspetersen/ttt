@@ -40,34 +40,6 @@
  * @{
  */
 
-/** @private
- *  Allocate and initialize new struct sr_channel and add to sdi.
- *  @param[in]  sdi The device instance the channel is connected to.
- *  @param[in]  index @copydoc sr_channel::index
- *  @param[in]  type @copydoc sr_channel::type
- *  @param[in]  enabled @copydoc sr_channel::enabled
- *  @param[in]  name @copydoc sr_channel::name
- *
- *  @return A new struct sr_channel*.
- */
-SR_PRIV struct sr_channel *sr_channel_new(struct sr_dev_inst *sdi,
-		int index, int type, gboolean enabled, const char *name)
-{
-	struct sr_channel *ch;
-
-	ch = g_malloc0(sizeof(struct sr_channel));
-	ch->sdi = sdi;
-	ch->index = index;
-	ch->type = type;
-	ch->enabled = enabled;
-	if (name)
-		ch->name = g_strdup(name);
-
-	sdi->channels = g_slist_append(sdi->channels, ch);
-
-	return ch;
-}
-
 
 /** @private
  *  Allocate and init struct for USB device instance.
@@ -90,11 +62,3 @@ SR_PRIV struct sr_usb_dev_inst *sr_usb_dev_inst_new(uint8_t bus,
 	return udi;
 }
 
-/** @private
- *  Free struct * allocated by sr_usb_dev_inst().
- *  @param usb  struct* to free. Must not be NULL.
- */
-SR_PRIV void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb)
-{
-	g_free(usb);
-}
