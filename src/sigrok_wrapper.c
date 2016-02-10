@@ -27,7 +27,7 @@ struct sr_context *sr_ctx = NULL;
 
 struct sr_dev_driver saleae_logic16_driver_info;
 
-GSList *devs;
+//GSList *devs;
 
 void sigrok_init(struct sr_context **ctx) {
     struct sr_dev_driver *driver;
@@ -51,18 +51,17 @@ void sigrok_init(struct sr_context **ctx) {
         sdiArr[i] = (struct sr_dev_inst *) l->data;
         sdiArr[i]->id = i;
         sdiArr[i]->cb = sr_data_recv_cb;
-        devs = g_slist_append(devs, sdiArr[i]);
         dev_open(sdiArr[i]); /* Calls upload */
         i++;
     }
 
     /* Have all devices start acquisition. */
-    for (GSList *l = devs; l; l = l->next) {
+    for (GSList *l = devices; l; l = l->next) {
         sigrok_start(l->data); /* Calls upload bitstream */
     }
 
     /* Have all devices fire. */
-    for (GSList *l = devs; l; l = l->next) {
+    for (GSList *l = devices; l; l = l->next) {
         logic16_start_acquisition(l->data);
     }
 
@@ -108,7 +107,7 @@ int sigrok_start(const struct sr_dev_inst *sdi) {
         return SR_ERR_DEV_CLOSED;
 
     drvc = di->context;
-    devc = sdi->priv;
+    devc = sdi->ctx;
     usb = sdi->conn;
 
     sr_info("dev_acquisition_start");
@@ -182,7 +181,7 @@ GSList *scan(struct sr_dev_driver *di) {
 
         devc = g_malloc0(sizeof(struct dev_context));
         devc->selected_voltage_range = VOLTAGE_RANGE_18_33_V;
-        sdi->priv = devc;
+        sdi->ctx = devc;
         drvc->instances = g_slist_append(drvc->instances, sdi);
         devices = g_slist_append(devices, sdi);
 
@@ -303,7 +302,7 @@ static int logic16_dev_open(struct sr_dev_inst *sdi) {
 static int dev_open(struct sr_dev_inst *sdi) {
     struct dev_context *devc;
 
-    devc = sdi->priv;
+    devc = sdi->ctx;
 
     sr_info("Waiting for device to reset.");
     while (1) {

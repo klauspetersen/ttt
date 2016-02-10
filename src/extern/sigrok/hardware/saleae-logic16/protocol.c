@@ -338,7 +338,7 @@ static int setup_register_mapping(const struct sr_dev_inst *sdi)
 	struct dev_context *devc;
 	int ret;
 
-	devc = sdi->priv;
+	devc = sdi->ctx;
 
 	if (devc->fpga_variant != FPGA_VARIANT_MCUPRO) {
 		uint8_t reg0, reg7;
@@ -378,7 +378,7 @@ static int setup_register_mapping(const struct sr_dev_inst *sdi)
 
 static int prime_fpga(const struct sr_dev_inst *sdi)
 {
-	struct dev_context *devc = sdi->priv;
+	struct dev_context *devc = sdi->ctx;
 	uint8_t eeprom_data[16];
 	uint8_t old_mode_reg, version;
 	uint8_t regs[8][2] = {
@@ -461,7 +461,7 @@ static int upload_fpga_bitstream(const struct sr_dev_inst *sdi, enum voltage_ran
 	int ret;
 	uint8_t command[64];
 
-	devc = sdi->priv;
+	devc = sdi->ctx;
 	drvc = sdi->driver->context;
 
 
@@ -554,7 +554,7 @@ int logic16_setup_acquisition(const struct sr_dev_inst *sdi, uint64_t samplerate
 	int ret;
 	struct dev_context *devc;
 
-	devc = sdi->priv;
+	devc = sdi->ctx;
 
 
 	if (BASE_CLOCK_0_FREQ % samplerate == 0 &&
@@ -629,7 +629,7 @@ SR_PRIV int logic16_start_acquisition(const struct sr_dev_inst *sdi){
 
 	sr_info("logic16_start_acquisition");
 
-    devc = sdi->priv;
+    devc = sdi->ctx;
 
     if ((ret = do_ep1_command(sdi, command, 1, NULL, 0)) != SR_OK)
             return ret;
@@ -644,7 +644,7 @@ SR_PRIV int logic16_init_device(const struct sr_dev_inst *sdi){
 	struct dev_context *devc;
 	int ret;
 
-	devc = sdi->priv;
+	devc = sdi->ctx;
 
     sr_info("logic16_init_device");
 

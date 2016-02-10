@@ -1057,7 +1057,7 @@ struct sr_dev_driver {
 
 	/* Dynamic */
 	/** Device driver context, considered private. Initialized by init(). */
-	void *context;
+	struct drv_context *context;
 };
 
 /** Serial port descriptor. */

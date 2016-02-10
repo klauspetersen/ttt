@@ -120,7 +120,7 @@ struct sr_dev_inst {
 	//void *conn;
 	struct sr_usb_dev_inst *conn;
 	/** Device instance private data (used?) */
-	void *priv;
+	struct dev_context *ctx;
 };
 
 SR_PRIV int usb_get_port_path(libusb_device *dev, char *path, int path_len);
