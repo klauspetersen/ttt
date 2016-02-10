@@ -18,19 +18,19 @@
 #define FX2_FIRMWARE        "saleae-logic16-fx2.fw"
 static void sr_data_recv_cb(sr_wrap_packet_t *packet);
 static int dev_open(struct sr_dev_inst *sdi);
-GSList *scan(struct sr_dev_driver *di, GSList *options);
+GSList *scan(struct sr_dev_driver *di);
 int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data);
-static int dev_acquisition_trigger(const struct sr_dev_inst *sdi);
+int usb_get_port_path(libusb_device *dev, char *path, int path_len);
 
 struct sr_dev_inst *sdiArr[SIGROK_WRAPPER_MAX_DEVICES];
 struct sr_context *sr_ctx = NULL;
 
 struct sr_dev_driver saleae_logic16_driver_info;
 
+GSList *devs;
 
 void sigrok_init(struct sr_context **ctx) {
     struct sr_dev_driver *driver;
-    struct sr_session *session;
     struct sr_dev_inst *sdi;
     struct drv_context *drvc;
     struct sr_channel;
@@ -42,36 +42,33 @@ void sigrok_init(struct sr_context **ctx) {
     libusb_init(&sr_ctx->libusb_ctx);
     sr_resource_set_hooks(sr_ctx, NULL, NULL, NULL, NULL);
 
-    session = g_malloc0(sizeof(struct sr_session));
-    session->ctx = ctx;
-
     drvc = g_malloc0(sizeof(struct drv_context));
     drvc->sr_ctx = sr_ctx;
     drvc->instances = NULL;
     driver->context = drvc;
 
-    GSList *devices = scan(driver, NULL);
+    GSList *devices = scan(driver);
 
     int i = 0;
     for (GSList *l = devices; l; l = l->next) {
         sdiArr[i] = (struct sr_dev_inst *) l->data;
         sdiArr[i]->id = i;
         sdiArr[i]->cb = sr_data_recv_cb;
-        session->devs = g_slist_append(session->devs, sdiArr[i]);
+        devs = g_slist_append(devs, sdiArr[i]);
         dev_open(sdiArr[i]); /* Calls upload */
         i++;
     }
 
     /* Have all devices start acquisition. */
-    for (l = session->devs; l; l = l->next) {
+    for (l = devs; l; l = l->next) {
         sdi = l->data;
         sigrok_start(sdi, sdi); /* Calls upload bitstream */
     }
 
     /* Have all devices fire. */
-    for (l = session->devs; l; l = l->next) {
+    for (l = devs; l; l = l->next) {
         sdi = l->data;
-        dev_acquisition_trigger(sdi);
+        logic16_start_acquisition(sdi);
     }
 
     *ctx = sr_ctx;
@@ -158,7 +155,7 @@ static void sr_data_recv_cb(sr_wrap_packet_t *packet){
 }
 
 
-GSList *scan(struct sr_dev_driver *di, GSList *options) {
+GSList *scan(struct sr_dev_driver *di) {
     struct drv_context *drvc;
     struct dev_context *devc;
     struct sr_dev_inst *sdi;
@@ -197,7 +194,9 @@ GSList *scan(struct sr_dev_driver *di, GSList *options) {
         if (ezusb_upload_firmware(drvc->sr_ctx, devlist[i], USB_CONFIGURATION, FX2_FIRMWARE) != SR_OK) {
             sr_err("Firmware upload failed.");
         }
-        sdi->conn = sr_usb_dev_inst_new(libusb_get_bus_number(devlist[i]), 0xff, NULL);
+
+        sdi->conn = g_malloc0(sizeof(struct sr_usb_dev_inst));
+        sdi->conn->devhdl = NULL;
     }
 
     libusb_free_device_list(devlist, 1);
@@ -265,15 +264,7 @@ static int logic16_dev_open(struct sr_dev_inst *sdi) {
             }
         }
 
-        if (!(ret = libusb_open(devlist[i], &usb->devhdl))) {
-            if (usb->address == 0xff) {
-                /*
-                 * First time we touch this device after FW
-                 * upload, so we don't know the address yet.
-                 */
-                usb->address = libusb_get_device_address(devlist[i]);
-            }
-        } else {
+        if ((ret = libusb_open(devlist[i], &usb->devhdl))) {
             sr_err("Failed to open device: %s.", libusb_error_name(ret));
             break;
         }
@@ -296,8 +287,7 @@ static int logic16_dev_open(struct sr_dev_inst *sdi) {
         }
 
         sdi->status = SR_ST_ACTIVE;
-        sr_info("Opened device on %d.%d (logical) / %s (physical), interface %d.", usb->bus, usb->address,
-                sdi->connection_id, USB_INTERFACE);
+        sr_info("Opened device on %d.%d (logical) / %s (physical), interface %d.", libusb_get_bus_number(devlist[i]), libusb_get_device_address(devlist[i]), sdi->connection_id, USB_INTERFACE);
         break;
     }
     libusb_free_device_list(devlist, 1);
@@ -337,6 +327,40 @@ static int dev_open(struct sr_dev_inst *sdi) {
     return SR_OK;
 }
 
-static int dev_acquisition_trigger(const struct sr_dev_inst *sdi) {
-    return logic16_start_acquisition(sdi);
+
+int usb_get_port_path(libusb_device *dev, char *path, int path_len){
+    uint8_t port_numbers[8];
+    int i, n, len;
+
+/*
+ * FreeBSD requires that devices prior to calling libusb_get_port_numbers()
+ * have been opened with libusb_open().
+ */
+#ifdef __FreeBSD__
+    struct libusb_device_handle *devh;
+	if (libusb_open(dev, &devh) != 0)
+		return SR_ERR;
+#endif
+    n = libusb_get_port_numbers(dev, port_numbers, sizeof(port_numbers));
+#ifdef __FreeBSD__
+    libusb_close(devh);
+#endif
+
+/* Workaround FreeBSD libusb_get_port_numbers() returning 0. */
+#ifdef __FreeBSD__
+    if (n == 0) {
+		port_numbers[0] = libusb_get_device_address(dev);
+		n = 1;
+	}
+#endif
+    if (n < 1)
+        return SR_ERR;
+
+    len = snprintf(path, path_len, "usb/%d-%d",
+                   libusb_get_bus_number(dev), port_numbers[0]);
+
+    for (i = 1; i < n; i++)
+        len += snprintf(path+len, path_len-len, ".%d", port_numbers[i]);
+
+    return SR_OK;
 }

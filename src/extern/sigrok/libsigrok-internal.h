@@ -32,10 +32,6 @@
 
 #include "sigrok_wrapper.h"
 
-
-struct zip;
-struct zip_stat;
-
 /**
  * @file
  *
@@ -82,10 +78,6 @@ struct sr_context {
 
 /** USB device instance */
 struct  sr_usb_dev_inst {
-	/** USB bus */
-	uint8_t bus;
-	/** Device address on USB bus */
-	uint8_t address;
 	/** libusb device handle */
 	struct libusb_device_handle *devhdl;
 };
@@ -125,27 +117,13 @@ struct sr_dev_inst {
 	/** Connection string to uniquely identify devices. */
 	char *connection_id;
 	/** Device instance connection data (used?) */
-	void *conn;
+	//void *conn;
+	struct sr_usb_dev_inst *conn;
 	/** Device instance private data (used?) */
 	void *priv;
 };
 
-/* USB-specific instances */
-SR_PRIV struct sr_usb_dev_inst *sr_usb_dev_inst_new(uint8_t bus,
-		uint8_t address, struct libusb_device_handle *hdl);
-
 SR_PRIV int usb_get_port_path(libusb_device *dev, char *path, int path_len);
-
-
-
-/*--- session.c -------------------------------------------------------------*/
-
-struct sr_session {
-	/** Context this session exists in. */
-	struct sr_context *ctx;
-	/** List of struct sr_dev_inst pointers. */
-	GSList *devs;
-};
 
 /*--- resource.c ------------------------------------------------------------*/
 
