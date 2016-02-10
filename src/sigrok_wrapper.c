@@ -19,7 +19,7 @@
 static void sr_data_recv_cb(sr_wrap_packet_t *packet);
 static int dev_open(struct sr_dev_inst *sdi);
 GSList *scan(struct sr_dev_driver *di);
-int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data);
+int sigrok_start(const struct sr_dev_inst *sdi);
 int usb_get_port_path(libusb_device *dev, char *path, int path_len);
 
 struct sr_dev_inst *sdiArr[SIGROK_WRAPPER_MAX_DEVICES];
@@ -31,10 +31,7 @@ GSList *devs;
 
 void sigrok_init(struct sr_context **ctx) {
     struct sr_dev_driver *driver;
-    struct sr_dev_inst *sdi;
     struct drv_context *drvc;
-    struct sr_channel;
-    GSList *l;
 
     driver = &saleae_logic16_driver_info;
 
@@ -60,15 +57,13 @@ void sigrok_init(struct sr_context **ctx) {
     }
 
     /* Have all devices start acquisition. */
-    for (l = devs; l; l = l->next) {
-        sdi = l->data;
-        sigrok_start(sdi, sdi); /* Calls upload bitstream */
+    for (GSList *l = devs; l; l = l->next) {
+        sigrok_start(l->data); /* Calls upload bitstream */
     }
 
     /* Have all devices fire. */
-    for (l = devs; l; l = l->next) {
-        sdi = l->data;
-        logic16_start_acquisition(sdi);
+    for (GSList *l = devs; l; l = l->next) {
+        logic16_start_acquisition(l->data);
     }
 
     *ctx = sr_ctx;
@@ -99,7 +94,7 @@ void sigrok_init(struct sr_context **ctx) {
 }
 
 
-int sigrok_start(const struct sr_dev_inst *sdi, void *cb_data) {
+int sigrok_start(const struct sr_dev_inst *sdi) {
     struct sr_dev_driver *di = sdi->driver;
     struct dev_context *devc;
     struct drv_context *drvc;
