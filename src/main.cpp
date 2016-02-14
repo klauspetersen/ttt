@@ -5,6 +5,7 @@
 #include "sigrok_wrapper.h"
 #include <tmmintrin.h>
 #include <assert.h>
+#include "saleae.h"
 
 #define LOG_PREFIX "main"
 
@@ -25,8 +26,8 @@ void loop(){
     sigrok_init(&ctx);
 }
 
-int main()
-{
+int main(){
+    Saleae saleae;
     thread t0(loop);
     thread t1(consumer_recv);
 

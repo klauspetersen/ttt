@@ -75,9 +75,7 @@ SR_PRIV int64_t sr_file_get_size(FILE *file)
 	return filesize;
 }
 
-static FILE *try_open_file(const char *datadir, const char *subdir,
-		const char *name)
-{
+static FILE *try_open_file(const char *datadir, const char *subdir,	const char *name){
 	char *filename;
 	FILE *file;
 
@@ -94,9 +92,7 @@ static FILE *try_open_file(const char *datadir, const char *subdir,
 	return file;
 }
 
-static int resource_open_default(struct sr_resource *res,
-		const char *name, void *cb_data)
-{
+int resource_open_default(struct sr_resource *res,	const char *name, void *cb_data){
 	int64_t filesize;
 #ifdef FIRMWARE_DIR
 	const char *builtindir;
@@ -151,8 +147,7 @@ static int resource_open_default(struct sr_resource *res,
 	return SR_OK;
 }
 
-static int resource_close_default(struct sr_resource *res, void *cb_data)
-{
+int resource_close_default(struct sr_resource *res, void *cb_data){
 	FILE *file;
 
 	(void)cb_data;
@@ -172,9 +167,7 @@ static int resource_close_default(struct sr_resource *res, void *cb_data)
 	return SR_OK;
 }
 
-static ssize_t resource_read_default(const struct sr_resource *res,
-		void *buf, size_t count, void *cb_data)
-{
+ssize_t resource_read_default(const struct sr_resource *res, void *buf, size_t count, void *cb_data){
 	FILE *file;
 	size_t n_read;
 
@@ -335,9 +328,7 @@ SR_PRIV ssize_t sr_resource_read(struct sr_context *ctx,
  *
  * @private
  */
-SR_PRIV void *sr_resource_load(struct sr_context *ctx,
-		int type, const char *name, size_t *size, size_t max_size)
-{
+SR_PRIV void *sr_resource_load(struct sr_context *ctx, int type, const char *name, size_t *size, size_t max_size){
 	struct sr_resource res;
 	void *buf;
 	size_t res_size;

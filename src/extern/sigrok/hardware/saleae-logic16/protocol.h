@@ -46,8 +46,6 @@ struct dev_context {
 	/** Distinguishing between original Logic16 and clones */
 	enum fpga_variant fpga_variant;
 
-
-
 	/** The currently configured samplerate of the device. */
 	uint64_t cur_samplerate;
 
@@ -57,15 +55,7 @@ struct dev_context {
 	/* EEPROM data from address 8. */
 	uint8_t eeprom_data[8];
 
-	int submitted_transfers;
-	int num_channels;
-	uint16_t channel_masks[16];
-	uint16_t channel_data[16];
-	int cur_channel;
-
-
 	unsigned int num_transfers;
-	struct libusb_transfer **transfers;
 	struct sr_context *ctx;
 
 	const uint8_t *fpga_register_map;

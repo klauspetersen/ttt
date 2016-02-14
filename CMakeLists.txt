@@ -50,7 +50,7 @@ file(GLOB EXTERN_HARDWARE_SOURCES
         "src/extern/sigrok/hardware/saleae-logic16/*.c"
         )
 
-set(SOURCE_FILES src/main.cpp src/sigrok_wrapper.c src/TransferObjectPool.cpp src/TransferObjectPool.h)
+set(SOURCE_FILES src/main.cpp src/sigrok_wrapper.c src/TransferObjectPool.cpp src/TransferObjectPool.h src/saleae.h)
 
 set(SOURCE_EXTERN_TRACE_SOURCES
         "src/extern/trace/raw_sampler.cpp"
@@ -77,7 +77,7 @@ set_property(TARGET ttt PROPERTY C_STANDARD 99)
 
 
 
-add_executable(tst ${TEST_SOURCES} src/TransferObjectPool.cpp src/TransferObjectPool.h src/tests/TransferObjectPoolTest.cpp)
+add_executable(tst ${TEST_SOURCES} src/TransferObjectPool.cpp src/TransferObjectPool.h src/tests/TransferObjectPoolTest.cpp src/saleae.h)
 
 target_compile_features(tst PRIVATE cxx_return_type_deduction)
 

@@ -27,7 +27,9 @@ struct sr_context *sr_ctx = NULL;
 
 struct sr_dev_driver saleae_logic16_driver_info;
 
-//GSList *devs;
+extern int resource_open_default(struct sr_resource *res,	const char *name, void *cb_data);
+extern ssize_t resource_read_default(const struct sr_resource *res, void *buf, size_t count, void *cb_data);
+extern int resource_close_default(struct sr_resource *res, void *cb_data);
 
 void sigrok_init(struct sr_context **ctx) {
     struct sr_dev_driver *driver;
@@ -37,7 +39,10 @@ void sigrok_init(struct sr_context **ctx) {
 
     sr_ctx = g_malloc0(sizeof(struct sr_context));
     libusb_init(&sr_ctx->libusb_ctx);
-    sr_resource_set_hooks(sr_ctx, NULL, NULL, NULL, NULL);
+    sr_ctx->resource_open_cb  = &resource_open_default;
+    sr_ctx->resource_close_cb = &resource_close_default;
+    sr_ctx->resource_read_cb  = &resource_read_default;
+    sr_ctx->resource_cb_data  = ctx;
 
     drvc = g_malloc0(sizeof(struct drv_context));
     drvc->sr_ctx = sr_ctx;
@@ -112,16 +117,10 @@ int sigrok_start(const struct sr_dev_inst *sdi) {
 
     sr_info("dev_acquisition_start");
 
-    memset(devc->channel_data, 0, sizeof(devc->channel_data));
-
-    devc->submitted_transfers = 0;
-
     logic16_setup_acquisition(sdi, devc->cur_samplerate);
 
     /* Allocate transfer buffers */
     devc->num_transfers = 100;
-    devc->transfers = malloc(sizeof(*devc->transfers) * devc->num_transfers);
-
     devc->ctx = drvc->sr_ctx;
 
     size = 160256;
@@ -132,9 +131,6 @@ int sigrok_start(const struct sr_dev_inst *sdi) {
         transfer = libusb_alloc_transfer(0);
         libusb_fill_bulk_transfer(transfer, usb->devhdl, 2 | LIBUSB_ENDPOINT_IN, buf, size, logic16_receive_transfer, (void *) sdi, 5000);
         libusb_submit_transfer(transfer);
-
-        devc->transfers[i] = transfer;
-        devc->submitted_transfers++;
     }
     return SR_OK;
 }
@@ -217,7 +213,7 @@ static int logic16_dev_open(struct sr_dev_inst *sdi) {
         return SR_ERR;
     }
 
-    device_count = libusb_get_device_list(drvc->sr_ctx->libusb_ctx, &devlist);
+    device_count = (int)libusb_get_device_list(drvc->sr_ctx->libusb_ctx, &devlist);
 
     sr_info("Device count: %d", device_count);
 
